@@ -17,14 +17,14 @@
 
 | 环节 | 方案 |
 |------|------|
-| 前端 | 原生 HTML + Live2D |
+| 前端 | 原生 HTML + Three.js + VRM 3D 虚拟形象 |
 | 后端 | Python FastAPI（一个文件） |
 | ASR / LLM / TTS | OpenAI API（一个 Key 搞定全部） |
 
 ## 项目结构
 
 ```
-frontend/    → 单页面：录音 + Live2D + 字幕
+frontend/    → 单页面：录音 + 3D VRM 虚拟形象 + 字幕
 backend/     → main.py + orchestrator.py + prompts/
 ```
 
