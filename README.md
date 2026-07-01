@@ -4,59 +4,45 @@
 
 ## 一句话介绍
 
-一个基于 AI 多模态能力的虚拟形象口语陪练，让用户通过语音与虚拟角色进行沉浸式场景对话，实时获得发音纠正和表达反馈。
+按住说话，AI 虚拟角色陪你练口语——实时对话 + 发音纠正 + 场景扮演。
 
-## 核心特色
-
-- 🎭 **虚拟形象互动** — Live2D/VRM 虚拟角色，情感表达 + 口型同步
-- 🗣️ **多语言对话** — 支持中/英/日/韩等 7+ 语言
-- 🎬 **场景化角色扮演** — 日常社交、职场商务、旅行出游等真实场景
-- 📊 **多维度反馈** — 发音、流利度、语法、词汇、语用得体性
-- 🎮 **游戏化激励** — 成就系统、等级经验、每日挑战
-
-## 技术架构速览
+## 核心链路
 
 ```
-Frontend (Next.js) ←→ API Gateway (FastAPI) ←→ Core Services ←→ AI Layer (GPT-4o/Whisper/ElevenLabs)
-                           ↕
-                   Avatar Engine (Three.js/Live2D)
+🎤 录音 → Whisper 转文字 → GPT-4o 对话+纠错 → TTS 合成语音 → 🔈 播放
+                                              ↘ 虚拟形象张嘴
 ```
+
+## 技术栈（极简）
+
+| 环节 | 方案 |
+|------|------|
+| 前端 | 原生 HTML + Live2D |
+| 后端 | Python FastAPI（一个文件） |
+| ASR / LLM / TTS | OpenAI API（一个 Key 搞定全部） |
 
 ## 项目结构
 
 ```
-jiangweidaji/
-├── frontend/        # React/Next.js 前端
-├── backend/         # Python/FastAPI 后端
-├── avatar-engine/   # 虚拟形象渲染引擎
-├── docs/            # 设计文档
-└── scripts/         # 部署脚本
+frontend/    → 单页面：录音 + Live2D + 字幕
+backend/     → main.py + orchestrator.py + prompts/
 ```
 
 ## 快速开始
 
 ```bash
-# 1. 克隆仓库
-git clone https://github.com/Yang-bo-yao/jiangweidaji.git
-cd jiangweidaji
-
-# 2. 配置环境变量
+# 1. 配置
 cp .env.example .env
-# 编辑 .env 填入 API Keys
+# 编辑 .env，填入 OPENAI_API_KEY
 
-# 3. 启动服务
-docker-compose up -d
+# 2. 启动后端
+cd backend && pip install -r requirements.txt && uvicorn main:app --reload
+
+# 3. 打开前端
+open frontend/index.html
 ```
 
-## 文档索引
+## 文档
 
-- [项目主体架构](./project_architecture.md) — 完整架构设计、目录结构、模块说明
-- 比赛规划 — 设计灵感与功能设计（见仓库 `比赛规划.md`）
-
-## 比赛阶段目标 (Phase 1)
-
-- [x] 架构设计
-- [ ] 对话编排引擎 (ASR → LLM → TTS 闭环)
-- [ ] 基础虚拟形象交互
-- [ ] 2-3 个场景 Demo
-- [ ] 发音反馈 MVP
+- [极简架构设计](./project_architecture.md)
+- [比赛规划](./比赛规划.md)
