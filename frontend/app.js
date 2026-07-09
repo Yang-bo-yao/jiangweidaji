@@ -1,7 +1,5 @@
-/* Lily 口语陪练 Agent — 前端主逻辑
- * Phase 2: 双通道接收
- *   通道1: HTTP POST /chat → 对话流 (字幕+音频)
- *   通道2: SSE /api/feedback/{session_id} → 评估反馈 (JSON)
+/* Lily 口语陪练 Agent — 前端主逻辑 (Phase 5: 完整版)
+ * 双通道接收 + 录音波形 + 场景切换 + 会话重置 + 难度徽章
  */
 
 const API_BASE = "http://localhost:8000";
@@ -11,6 +9,8 @@ const recordBtn = document.getElementById("record-btn");
 const messagesDiv = document.getElementById("messages");
 const statusText = document.getElementById("status-text");
 const scenarioSelect = document.getElementById("scenario");
+const resetBtn = document.getElementById("reset-btn");
+const waveform = document.getElementById("waveform");
 
 // ─── 会话状态 ───────────────────────────────────────────────────
 const sessionId = "session_" + Date.now();
@@ -25,25 +25,20 @@ function connectFeedbackSSE() {
   if (feedbackEventSource) {
     feedbackEventSource.close();
   }
-
   feedbackEventSource = new EventSource(`${API_BASE}/api/feedback/${sessionId}`);
 
   feedbackEventSource.addEventListener("evaluation", (event) => {
     const evaluation = JSON.parse(event.data);
     renderFeedback(evaluation);
     statusText.textContent = "评估完成 ✓";
+    statusText.parentElement.classList.remove("loading");
   });
 
-  feedbackEventSource.addEventListener("timeout", () => {
-    // 超时静默处理，等待下一次
-  });
+  feedbackEventSource.addEventListener("timeout", () => {});
 
-  feedbackEventSource.onerror = () => {
-    // SSE 断开后自动重连，不提示
-  };
+  feedbackEventSource.onerror = () => {};
 }
 
-// 连接 SSE
 connectFeedbackSSE();
 
 // ─── 录音逻辑 ───────────────────────────────────────────────────
@@ -74,6 +69,7 @@ function startRecording() {
   isRecording = true;
   recordBtn.classList.add("recording");
   recordBtn.querySelector(".btn-text").textContent = "松开发送";
+  waveform.classList.remove("hidden");
   statusText.textContent = "录音中...";
   statusText.parentElement.classList.add("recording");
 }
@@ -84,6 +80,7 @@ function stopRecording() {
   isRecording = false;
   recordBtn.classList.remove("recording");
   recordBtn.querySelector(".btn-text").textContent = "按住说话";
+  waveform.classList.add("hidden");
   statusText.textContent = "Lily 思考中...";
   statusText.parentElement.classList.remove("recording");
   statusText.parentElement.classList.add("loading");
@@ -104,6 +101,38 @@ recordBtn.addEventListener("touchstart", (e) => {
 recordBtn.addEventListener("touchend", (e) => {
   e.preventDefault();
   stopRecording();
+});
+
+// ─── 场景切换：重置对话 ─────────────────────────────────────────
+scenarioSelect.addEventListener("change", async () => {
+  // 清空对话区
+  messagesDiv.innerHTML = `
+    <div class="message lily">
+      <div class="avatar">🌸</div>
+      <div class="bubble">
+        场景已切换！Let's start a new conversation. 🎤
+      </div>
+    </div>
+  `;
+  // 清空反馈面板
+  document.getElementById("feedback-content").innerHTML = `
+    <div class="feedback-placeholder">
+      🎤 按住下方按钮说话<br><br>
+      说完后这里会显示<br>评分雷达图和纠错建议
+    </div>
+  `;
+  // 重置后端会话
+  try {
+    await fetch(`${API_BASE}/session/${sessionId}/reset`, { method: "POST" });
+    updateStatusBar({ difficulty: "medium", streak_errors: 0, total_turns: 0 });
+  } catch (e) {
+    console.error("重置会话失败:", e);
+  }
+});
+
+// ─── 重置按钮 ───────────────────────────────────────────────────
+resetBtn.addEventListener("click", async () => {
+  scenarioSelect.dispatchEvent(new Event("change"));
 });
 
 // ─── 发送音频 (通道1: HTTP POST) ────────────────────────────────
@@ -138,20 +167,12 @@ async function sendAudio(audioBlob) {
     playAudio(data.audio_base64);
 
     // 更新状态栏
-    if (data.difficulty) {
-      document.getElementById("difficulty-label").textContent = data.difficulty;
-    }
-    if (data.streak_errors !== undefined) {
-      document.getElementById("streak-label").textContent = data.streak_errors;
-    }
-    if (data.total_turns !== undefined) {
-      document.getElementById("turns-label").textContent = data.total_turns;
-    }
+    updateStatusBar(data);
 
     // 对话已返回，等待 SSE 推送评估反馈
     statusText.textContent = "等待评估反馈...";
 
-    // 重新连接 SSE（每次对话后需要重新订阅）
+    // 重新连接 SSE
     setTimeout(() => connectFeedbackSSE(), 500);
 
   } catch (err) {
@@ -176,7 +197,7 @@ function appendMessage(role, text, toolCalls) {
   bubble.className = "bubble";
   bubble.textContent = text;
 
-  // 如果有工具调用，在气泡下方展示工具信息
+  // 工具调用展示
   if (toolCalls && toolCalls.length > 0) {
     const toolDiv = document.createElement("div");
     toolDiv.className = "tool-calls";
@@ -202,7 +223,6 @@ function appendMessage(role, text, toolCalls) {
       item.appendChild(args);
       toolDiv.appendChild(item);
     }
-
     bubble.appendChild(toolDiv);
   }
 
@@ -225,6 +245,20 @@ function playAudio(base64Audio) {
   const audio = new Audio(url);
   audio.play();
   audio.onended = () => URL.revokeObjectURL(url);
+}
+
+function updateStatusBar(data) {
+  if (data.difficulty) {
+    const dl = document.getElementById("difficulty-label");
+    dl.textContent = data.difficulty;
+    dl.className = `badge badge-${data.difficulty}`;
+  }
+  if (data.streak_errors !== undefined) {
+    document.getElementById("streak-label").textContent = data.streak_errors;
+  }
+  if (data.total_turns !== undefined) {
+    document.getElementById("turns-label").textContent = data.total_turns;
+  }
 }
 
 // ─── 初始化 ─────────────────────────────────────────────────────

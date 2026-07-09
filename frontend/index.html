@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lily — 口语陪练 Agent</title>
   <link rel="stylesheet" href="style.css">
+  <!-- Chart.js (雷达图) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
   <div id="app">
@@ -14,10 +16,11 @@
       <div class="header-controls">
         <label for="scenario">场景：</label>
         <select id="scenario">
-          <option value="restaurant">餐厅点餐</option>
-          <option value="travel">旅行问路</option>
-          <option value="interview">面试求职</option>
+          <option value="restaurant">🍽️ 餐厅点餐</option>
+          <option value="travel">✈️ 旅行问路</option>
+          <option value="interview">💼 面试求职</option>
         </select>
+        <button id="reset-btn" class="reset-btn" title="重置会话">🔄</button>
       </div>
     </header>
 
@@ -42,7 +45,8 @@
         </div>
         <div id="feedback-content" class="feedback-content">
           <div class="feedback-placeholder">
-            说完一句话后<br>这里会显示评估结果
+            🎤 按住下方按钮说话<br><br>
+            说完后这里会显示<br>评分雷达图和纠错建议
           </div>
         </div>
       </aside>
@@ -52,7 +56,7 @@
     <div class="status-bar">
       <span id="status-text">就绪</span>
       <span class="status-info">
-        难度: <span id="difficulty-label">medium</span>
+        难度: <span id="difficulty-label" class="badge badge-medium">medium</span>
         | 连错: <span id="streak-label">0</span>
         | 轮次: <span id="turns-label">0</span>
       </span>
@@ -60,6 +64,13 @@
 
     <!-- 录音按钮 -->
     <footer class="footer">
+      <div id="waveform" class="waveform hidden">
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+        <div class="wave-bar"></div>
+      </div>
       <button id="record-btn" class="record-btn">
         <span class="mic-icon">🎤</span>
         <span class="btn-text">按住说话</span>
