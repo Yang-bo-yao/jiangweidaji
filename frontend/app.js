@@ -137,6 +137,17 @@ async function sendAudio(audioBlob) {
     // 播放 TTS 音频
     playAudio(data.audio_base64);
 
+    // 更新状态栏
+    if (data.difficulty) {
+      document.getElementById("difficulty-label").textContent = data.difficulty;
+    }
+    if (data.streak_errors !== undefined) {
+      document.getElementById("streak-label").textContent = data.streak_errors;
+    }
+    if (data.total_turns !== undefined) {
+      document.getElementById("turns-label").textContent = data.total_turns;
+    }
+
     // 对话已返回，等待 SSE 推送评估反馈
     statusText.textContent = "等待评估反馈...";
 
