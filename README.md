@@ -1,10 +1,10 @@
-# 多国语口语虚拟形象 Agent
+# Lily — 双流多智能体口语陪练 Agent
 
 > **"改变教育 —— AI 学习体验重塑赛道"** 参赛项目
 
 ## 一句话介绍
 
-双流多智能体口语陪练——主干对话轨极速响应 + 评估纠错轨异步反馈，LangGraph 状态机自适应难度，MCP 工具动态注入专业术语，3D 虚拟形象沉浸式对话。
+Lily 是一个双流多智能体口语陪练 Agent——主干对话轨极速响应 + 评估纠错轨异步反馈，LangGraph 状态机自适应难度，MCP 工具动态注入专业术语。
 
 ## 核心架构
 
@@ -28,7 +28,7 @@
 
 | 环节 | 方案 |
 |------|------|
-| 前端 | 原生 HTML + Three.js + VRM 3D 虚拟形象 |
+| 前端 | 原生 HTML + JS + Chart.js (反馈雷达图) |
 | 后端 | Python FastAPI + LangGraph 状态机 |
 | 双流Agent | 主干对话轨 + 评估纠错轨 (异步并发) |
 | MCP工具 | 词典API + 行业术语库 + RAG知识库 |
@@ -54,7 +54,7 @@ open frontend/index.html
 
 ## 文档
 
-- [双流多智能体架构设计](./project_architecture.md) — 完整架构、LangGraph状态机、MCP工具、豆包API集成
+- [架构设计与开发步骤](./project_architecture.md) — 完整架构、LangGraph状态机、MCP工具、豆包API、开发步骤
 - [比赛规划](./比赛规划.md) — 设计灵感与功能设计
 
 ## MVP 交付清单
@@ -64,5 +64,5 @@ open frontend/index.html
 - [ ] 双流并发 (主干对话 + 评估纠错)
 - [ ] LangGraph 状态机 + 自适应难度
 - [ ] MCP 工具挂载 (词典 + 术语)
-- [ ] VRM 3D 虚拟形象
+- [ ] 反馈面板 (雷达图 + 语法建议)
 - [ ] 3个场景 Demo (餐厅/旅行/面试)
