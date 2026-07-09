@@ -21,16 +21,31 @@
       </div>
     </header>
 
-    <!-- 对话区域 -->
-    <main class="chat-area">
-      <div id="messages" class="messages">
-        <div class="message lily">
-          <div class="avatar">🌸</div>
-          <div class="bubble">
-            Hi! I'm Lily. Let's practice English together! 🎤 Press and hold the button to talk.
+    <!-- 主体区域：左对话 + 右反馈 -->
+    <main class="main-content">
+      <!-- 对话区域 -->
+      <section class="chat-section">
+        <div id="messages" class="messages">
+          <div class="message lily">
+            <div class="avatar">🌸</div>
+            <div class="bubble">
+              Hi! I'm Lily. Let's practice English together! 🎤 Press and hold the button to talk.
+            </div>
           </div>
         </div>
-      </div>
+      </section>
+
+      <!-- 反馈面板 -->
+      <aside class="feedback-section">
+        <div class="feedback-header">
+          <h2>📊 评估反馈</h2>
+        </div>
+        <div id="feedback-content" class="feedback-content">
+          <div class="feedback-placeholder">
+            说完一句话后<br>这里会显示评估结果
+          </div>
+        </div>
+      </aside>
     </main>
 
     <!-- 状态栏 -->
@@ -47,6 +62,7 @@
     </footer>
   </div>
 
+  <script src="feedback.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

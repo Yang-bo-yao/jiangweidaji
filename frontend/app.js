@@ -1,5 +1,7 @@
 /* Lily 口语陪练 Agent — 前端主逻辑
- * Phase 1: 录音 → 上传 → 接收回复 → 播放音频 + 显示字幕
+ * Phase 2: 双通道接收
+ *   通道1: HTTP POST /chat → 对话流 (字幕+音频)
+ *   通道2: SSE /api/feedback/{session_id} → 评估反馈 (JSON)
  */
 
 const API_BASE = "http://localhost:8000";
@@ -16,14 +18,38 @@ let mediaRecorder = null;
 let audioChunks = [];
 let isRecording = false;
 
+// ─── SSE: 评估反馈通道 ──────────────────────────────────────────
+let feedbackEventSource = null;
+
+function connectFeedbackSSE() {
+  if (feedbackEventSource) {
+    feedbackEventSource.close();
+  }
+
+  feedbackEventSource = new EventSource(`${API_BASE}/api/feedback/${sessionId}`);
+
+  feedbackEventSource.addEventListener("evaluation", (event) => {
+    const evaluation = JSON.parse(event.data);
+    renderFeedback(evaluation);
+    statusText.textContent = "评估完成 ✓";
+  });
+
+  feedbackEventSource.addEventListener("timeout", () => {
+    // 超时静默处理，等待下一次
+  });
+
+  feedbackEventSource.onerror = () => {
+    // SSE 断开后自动重连，不提示
+  };
+}
+
+// 连接 SSE
+connectFeedbackSSE();
+
 // ─── 录音逻辑 ───────────────────────────────────────────────────
 
-/**
- * 初始化录音
- */
 async function initRecorder() {
   const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  // 优先使用 webm，兼容性最好
   const mimeType = MediaRecorder.isTypeSupported("audio/webm")
     ? "audio/webm"
     : "audio/mp4";
@@ -42,9 +68,6 @@ async function initRecorder() {
   };
 }
 
-/**
- * 开始录音
- */
 function startRecording() {
   if (!mediaRecorder || isRecording) return;
   mediaRecorder.start();
@@ -55,28 +78,25 @@ function startRecording() {
   statusText.parentElement.classList.add("recording");
 }
 
-/**
- * 停止录音
- */
 function stopRecording() {
   if (!mediaRecorder || !isRecording) return;
   mediaRecorder.stop();
   isRecording = false;
   recordBtn.classList.remove("recording");
   recordBtn.querySelector(".btn-text").textContent = "按住说话";
-  statusText.textContent = "处理中...";
+  statusText.textContent = "Lily 思考中...";
   statusText.parentElement.classList.remove("recording");
   statusText.parentElement.classList.add("loading");
 }
 
-// 按住说话 — 鼠标事件
+// 鼠标事件
 recordBtn.addEventListener("mousedown", startRecording);
 recordBtn.addEventListener("mouseup", stopRecording);
 recordBtn.addEventListener("mouseleave", () => {
   if (isRecording) stopRecording();
 });
 
-// 按住说话 — 触摸事件 (移动端)
+// 触摸事件
 recordBtn.addEventListener("touchstart", (e) => {
   e.preventDefault();
   startRecording();
@@ -86,7 +106,7 @@ recordBtn.addEventListener("touchend", (e) => {
   stopRecording();
 });
 
-// ─── 发送音频到后端 ─────────────────────────────────────────────
+// ─── 发送音频 (通道1: HTTP POST) ────────────────────────────────
 
 async function sendAudio(audioBlob) {
   const formData = new FormData();
@@ -117,8 +137,12 @@ async function sendAudio(audioBlob) {
     // 播放 TTS 音频
     playAudio(data.audio_base64);
 
-    statusText.textContent = "就绪";
-    statusText.parentElement.classList.remove("loading");
+    // 对话已返回，等待 SSE 推送评估反馈
+    statusText.textContent = "等待评估反馈...";
+
+    // 重新连接 SSE（每次对话后需要重新订阅）
+    setTimeout(() => connectFeedbackSSE(), 500);
+
   } catch (err) {
     console.error("请求失败:", err);
     statusText.textContent = "出错了: " + err.message;
@@ -129,9 +153,6 @@ async function sendAudio(audioBlob) {
 
 // ─── UI 辅助 ────────────────────────────────────────────────────
 
-/**
- * 添加一条消息到对话区
- */
 function appendMessage(role, text) {
   const msgDiv = document.createElement("div");
   msgDiv.className = `message ${role}`;
@@ -148,13 +169,9 @@ function appendMessage(role, text) {
   msgDiv.appendChild(bubble);
   messagesDiv.appendChild(msgDiv);
 
-  // 自动滚动到底部
   messagesDiv.parentElement.scrollTop = messagesDiv.parentElement.scrollHeight;
 }
 
-/**
- * 播放 base64 音频
- */
 function playAudio(base64Audio) {
   const audioBytes = atob(base64Audio);
   const arrayBuffer = new Uint8Array(audioBytes.length);
