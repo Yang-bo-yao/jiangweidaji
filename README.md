@@ -4,45 +4,65 @@
 
 ## 一句话介绍
 
-按住说话，AI 虚拟角色陪你练口语——实时对话 + 发音纠正 + 场景扮演。
+双流多智能体口语陪练——主干对话轨极速响应 + 评估纠错轨异步反馈，LangGraph 状态机自适应难度，MCP 工具动态注入专业术语，3D 虚拟形象沉浸式对话。
 
-## 核心链路
+## 核心架构
 
 ```
-🎤 录音 → Whisper 转文字 → GPT-4o 对话+纠错 → TTS 合成语音 → 🔈 播放
-                                              ↘ 虚拟形象张嘴
+                    LangGraph 状态机编排
+                   /                      \
+        ┌─────────▼──────────┐  ┌────────▼─────────┐
+        │  主干对话轨 (Main)  │  │ 评估纠错轨 (Eval) │
+        │  · 豆包ASR→LLM→TTS │  │ · 考官LLM→JSON   │
+        │  · 流式语音响应     │  │ · SSE推送反馈     │
+        └─────────┬──────────┘  └────────┬─────────┘
+                   │      并发执行        │
+                   └──────────┬──────────┘
+                              │
+                    MCP 工具层 (词典/术语/RAG)
+                              │
+                    豆包大模型 API (火山引擎Ark)
 ```
 
-## 技术栈（极简）
+## 技术栈
 
 | 环节 | 方案 |
 |------|------|
 | 前端 | 原生 HTML + Three.js + VRM 3D 虚拟形象 |
-| 后端 | Python FastAPI（一个文件） |
-| ASR / LLM / TTS | OpenAI API（一个 Key 搞定全部） |
-
-## 项目结构
-
-```
-frontend/    → 单页面：录音 + 3D VRM 虚拟形象 + 字幕
-backend/     → main.py + orchestrator.py + prompts/
-```
+| 后端 | Python FastAPI + LangGraph 状态机 |
+| 双流Agent | 主干对话轨 + 评估纠错轨 (异步并发) |
+| MCP工具 | 词典API + 行业术语库 + RAG知识库 |
+| LLM/ASR/TTS | 豆包大模型 (火山引擎 Ark, 兼容OpenAI SDK) |
+| 通信 | WebSocket (对话流) + SSE (反馈流) |
 
 ## 快速开始
 
 ```bash
-# 1. 配置
+# 1. 配置环境变量
 cp .env.example .env
-# 编辑 .env，填入 OPENAI_API_KEY
+# 编辑 .env，填入火山引擎 ARK_API_KEY 和模型ID
 
-# 2. 启动后端
-cd backend && pip install -r requirements.txt && uvicorn main:app --reload
+# 2. 安装后端依赖
+pip install -r requirements.txt
 
-# 3. 打开前端
+# 3. 启动后端
+cd backend && uvicorn main:app --reload --port 8000
+
+# 4. 打开前端
 open frontend/index.html
 ```
 
 ## 文档
 
-- [极简架构设计](./project_architecture.md)
-- [比赛规划](./比赛规划.md)
+- [双流多智能体架构设计](./project_architecture.md) — 完整架构、LangGraph状态机、MCP工具、豆包API集成
+- [比赛规划](./比赛规划.md) — 设计灵感与功能设计
+
+## MVP 交付清单
+
+- [x] 架构设计
+- [ ] 豆包 ASR + LLM + TTS 调通
+- [ ] 双流并发 (主干对话 + 评估纠错)
+- [ ] LangGraph 状态机 + 自适应难度
+- [ ] MCP 工具挂载 (词典 + 术语)
+- [ ] VRM 3D 虚拟形象
+- [ ] 3个场景 Demo (餐厅/旅行/面试)
