@@ -43,6 +43,7 @@ class ChatResponse(BaseModel):
     difficulty: str          # 当前难度级别
     streak_errors: int       # 连续出错次数
     total_turns: int         # 总对话轮次
+    tool_calls: list         # 本轮工具调用记录
 
 
 class SessionStatus(BaseModel):
@@ -67,6 +68,13 @@ async def list_scenarios():
             for k, v in SCENARIO_NAMES.items()
         ]
     }
+
+
+@app.get("/tools")
+async def list_tools():
+    """列出所有已注册的 MCP 工具"""
+    from backend.mcp.server import list_tools
+    return {"tools": list_tools()}
 
 
 # ─── 核心端点: POST /chat (LangGraph 状态机) ─────────────────────
@@ -112,6 +120,7 @@ async def chat_endpoint(
         difficulty=ss["difficulty_level"],
         streak_errors=ss["streak_errors"],
         total_turns=ss["total_turns"],
+        tool_calls=final_state.get("tool_calls", []),
     )
 
 

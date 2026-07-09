@@ -387,3 +387,37 @@ body {
   0%, 100% { box-shadow: 0 0 0 0 rgba(229, 57, 53, 0.4); }
   50% { box-shadow: 0 0 0 12px rgba(229, 57, 53, 0); }
 }
+
+/* ─── 工具调用展示 ─── */
+.tool-calls {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px dashed rgba(102, 126, 234, 0.3);
+}
+
+.tool-label {
+  font-size: 11px;
+  color: #667eea;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.tool-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+
+.tool-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #5568d3;
+}
+
+.tool-args {
+  font-size: 11px;
+  color: #888;
+  font-family: monospace;
+  word-break: break-all;
+}

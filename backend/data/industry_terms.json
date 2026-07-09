@@ -1,0 +1,62 @@
+{
+  "restaurant": {
+    "name": "餐厅点餐",
+    "terms": [
+      {"en": "appetizer", "zh": "开胃菜", "example": "Would you like to start with an appetizer?"},
+      {"en": "main course", "zh": "主菜", "example": "For your main course, we have steak and salmon."},
+      {"en": "beverage", "zh": "饮料", "example": "What beverage would you like to order?"},
+      {"en": "rare", "zh": "一分熟", "example": "How would you like your steak — rare, medium, or well-done?"},
+      {"en": "medium", "zh": "五分熟", "example": "I'll have my steak medium, please."},
+      {"en": "well-done", "zh": "全熟", "example": "She prefers her steak well-done."},
+      {"en": "dessert", "zh": "甜点", "example": "Would you like to see the dessert menu?"},
+      {"en": "side dish", "zh": "配菜", "example": "It comes with a side dish of your choice."},
+      {"en": "starter", "zh": "前菜", "example": "Let's order a starter to share."},
+      {"en": "bill", "zh": "账单", "example": "Could I have the bill, please?"},
+      {"en": "tip", "zh": "小费", "example": "A 15% tip is customary here."},
+      {"en": "reservation", "zh": "预订", "example": "Do you have a reservation?"},
+      {"en": "waiter", "zh": "服务员", "example": "Excuse me, waiter? Could we order now?"},
+      {"en": "menu", "zh": "菜单", "example": "Here is our menu for today."},
+      {"en": "specialty", "zh": "招牌菜", "example": "Our specialty is grilled lamb."}
+    ]
+  },
+  "travel": {
+    "name": "旅行问路",
+    "terms": [
+      {"en": "boarding pass", "zh": "登机牌", "example": "Please show your boarding pass at the gate."},
+      {"en": "layover", "zh": "中转停留", "example": "We have a 3-hour layover in Tokyo."},
+      {"en": "itinerary", "zh": "行程", "example": "Here is your travel itinerary."},
+      {"en": "check-in", "zh": "办理登机/入住", "example": "Check-in starts two hours before departure."},
+      {"en": "departure", "zh": "出发/起飞", "example": "What time is your departure?"},
+      {"en": "customs", "zh": "海关", "example": "Please proceed to customs after baggage claim."},
+      {"en": "landmark", "zh": "地标", "example": "The museum is a famous landmark here."},
+      {"en": "direction", "zh": "方向", "example": "Could you give me directions to the station?"},
+      {"en": "straight ahead", "zh": "直走", "example": "Go straight ahead for two blocks."},
+      {"en": "turn left", "zh": "左转", "example": "Turn left at the traffic light."},
+      {"en": "round trip", "zh": "往返", "example": "I'd like a round trip ticket, please."},
+      {"en": "accommodation", "zh": "住宿", "example": "What type of accommodation do you prefer?"},
+      {"en": "souvenir", "zh": "纪念品", "example": "Let's buy some souvenirs at the market."},
+      {"en": "tourist attraction", "zh": "旅游景点", "example": "This is the most popular tourist attraction."},
+      {"en": "public transit", "zh": "公共交通", "example": "You can take public transit to get there."}
+    ]
+  },
+  "interview": {
+    "name": "面试求职",
+    "terms": [
+      {"en": "strengths", "zh": "优势", "example": "What would you say are your main strengths?"},
+      {"en": "weaknesses", "zh": "弱点", "example": "Can you tell me about your weaknesses?"},
+      {"en": "experience", "zh": "经验", "example": "Tell me about your previous work experience."},
+      {"en": "qualification", "zh": "资历/资格", "example": "What qualifications do you have for this role?"},
+      {"en": "salary expectation", "zh": "薪资期望", "example": "What are your salary expectations?"},
+      {"en": "career goal", "zh": "职业目标", "example": "What are your long-term career goals?"},
+      {"en": "teamwork", "zh": "团队合作", "example": "Can you give an example of your teamwork?"},
+      {"en": "leadership", "zh": "领导力", "example": "Describe your leadership style."},
+      {"en": "problem-solving", "zh": "解决问题能力", "example": "How would you describe your problem-solving skills?"},
+      {"en": "cultural fit", "zh": "文化契合度", "example": "Why do you think you're a good cultural fit?"},
+      {"en": "self-introduction", "zh": "自我介绍", "example": "Please start with a brief self-introduction."},
+      {"en": "achievement", "zh": "成就", "example": "What is your biggest professional achievement?"},
+      {"en": "responsibility", "zh": "职责", "example": "What were your main responsibilities?"},
+      {"en": "challenge", "zh": "挑战", "example": "Describe a challenge you faced at work."},
+      {"en": "feedback", "zh": "反馈", "example": "How do you handle feedback from your manager?"}
+    ]
+  }
+}

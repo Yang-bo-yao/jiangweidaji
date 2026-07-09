@@ -11,6 +11,7 @@ from backend.graph.state import AgentState, EmotionState
 from backend.llm import asr as asr_module, chat as chat_module, tts as tts_module, evaluate
 from backend.prompts.difficulty import get_lily_prompt
 from backend.api.feedback import push_feedback
+from backend.mcp.server import get_tool_schemas
 
 
 # ─── 会话状态存储（跨轮次）──────────────────────────────────────
@@ -57,7 +58,7 @@ async def state_update_node(state: AgentState) -> dict:
 
 # ─── 节点 3: 主干对话轨 ────────────────────────────────────────
 async def main_track_node(state: AgentState) -> dict:
-    """Lily 角色扮演对话 + TTS"""
+    """Lily 角色扮演对话 + 工具调用 + TTS"""
     user_text = state.get("user_text", "")
     scenario = state.get("scenario", "restaurant")
     difficulty = state.get("difficulty_level", "medium")
@@ -66,8 +67,13 @@ async def main_track_node(state: AgentState) -> dict:
     # 按当前难度加载 Prompt
     system_prompt = get_lily_prompt(scenario, difficulty)
 
-    # LLM 对话
-    reply_text = await chat_module.chat(system_prompt, history, user_text)
+    # 获取 MCP 工具 schema
+    tools = get_tool_schemas()
+
+    # LLM 对话（支持工具调用）
+    result = await chat_module.chat_with_tools(system_prompt, history, user_text, tools)
+    reply_text = result["reply_text"]
+    tool_calls = result["tool_calls"]
 
     # TTS 合成
     audio_bytes = await tts_module.synthesize(reply_text)
@@ -76,6 +82,7 @@ async def main_track_node(state: AgentState) -> dict:
     return {
         "reply_text": reply_text,
         "audio_out_base64": audio_b64,
+        "tool_calls": tool_calls,
     }
 
 

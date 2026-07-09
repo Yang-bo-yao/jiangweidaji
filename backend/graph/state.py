@@ -33,6 +33,7 @@ class AgentState(TypedDict, total=False):
     # ─── 主干对话轨输出 ───
     reply_text: str                        # Lily 的回复文本
     audio_out_base64: str                  # TTS 音频 (base64)
+    tool_calls: list                       # 本轮工具调用记录
 
     # ─── 评估纠错轨输出 ───
     evaluation: dict                       # JSON 结构化评估数据

@@ -131,8 +131,8 @@ async function sendAudio(audioBlob) {
     // 显示用户说的内容
     appendMessage("user", data.user_text);
 
-    // 显示 Lily 的回复
-    appendMessage("lily", data.reply_text);
+    // 显示 Lily 的回复（含工具调用信息）
+    appendMessage("lily", data.reply_text, data.tool_calls);
 
     // 播放 TTS 音频
     playAudio(data.audio_base64);
@@ -164,7 +164,7 @@ async function sendAudio(audioBlob) {
 
 // ─── UI 辅助 ────────────────────────────────────────────────────
 
-function appendMessage(role, text) {
+function appendMessage(role, text, toolCalls) {
   const msgDiv = document.createElement("div");
   msgDiv.className = `message ${role}`;
 
@@ -175,6 +175,36 @@ function appendMessage(role, text) {
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.textContent = text;
+
+  // 如果有工具调用，在气泡下方展示工具信息
+  if (toolCalls && toolCalls.length > 0) {
+    const toolDiv = document.createElement("div");
+    toolDiv.className = "tool-calls";
+
+    const toolLabel = document.createElement("div");
+    toolLabel.className = "tool-label";
+    toolLabel.textContent = `🔧 工具调用 (${toolCalls.length})`;
+    toolDiv.appendChild(toolLabel);
+
+    for (const tc of toolCalls) {
+      const item = document.createElement("div");
+      item.className = "tool-item";
+
+      const name = document.createElement("span");
+      name.className = "tool-name";
+      name.textContent = tc.name;
+
+      const args = document.createElement("span");
+      args.className = "tool-args";
+      args.textContent = JSON.stringify(tc.arguments);
+
+      item.appendChild(name);
+      item.appendChild(args);
+      toolDiv.appendChild(item);
+    }
+
+    bubble.appendChild(toolDiv);
+  }
 
   msgDiv.appendChild(avatar);
   msgDiv.appendChild(bubble);
