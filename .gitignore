@@ -1,0 +1,13 @@
+# Environment
+.env
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.egg-info/
+.DS_Store
+node_modules/
+
+# IDE
+.vscode/
+.idea/

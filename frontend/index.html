@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lily — 口语陪练 Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="app">
+    <!-- 顶部栏 -->
+    <header class="header">
+      <h1>🌸 Lily <span class="subtitle">口语陪练 Agent</span></h1>
+      <div class="header-controls">
+        <label for="scenario">场景：</label>
+        <select id="scenario">
+          <option value="restaurant">餐厅点餐</option>
+          <option value="travel">旅行问路</option>
+          <option value="interview">面试求职</option>
+        </select>
+      </div>
+    </header>
+
+    <!-- 对话区域 -->
+    <main class="chat-area">
+      <div id="messages" class="messages">
+        <div class="message lily">
+          <div class="avatar">🌸</div>
+          <div class="bubble">
+            Hi! I'm Lily. Let's practice English together! 🎤 Press and hold the button to talk.
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- 状态栏 -->
+    <div class="status-bar">
+      <span id="status-text">就绪</span>
+    </div>
+
+    <!-- 录音按钮 -->
+    <footer class="footer">
+      <button id="record-btn" class="record-btn">
+        <span class="mic-icon">🎤</span>
+        <span class="btn-text">按住说话</span>
+      </button>
+    </footer>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
