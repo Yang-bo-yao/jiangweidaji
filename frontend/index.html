@@ -3,313 +3,147 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Lily — 口语陪练 Agent</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;500;600;700;800&family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+  <title>Lily 口语陪练 Agent</title>
   <link rel="stylesheet" href="style.css">
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>
 <body>
   <div id="app">
-
-    <!-- ═══ 顶部导航 ═══ -->
     <header class="topbar">
       <div class="brand">
-        <div class="brand-logo">
-          <svg viewBox="0 0 40 40" class="brand-icon">
-            <circle cx="20" cy="20" r="18" fill="var(--primary)"/>
-            <text x="20" y="27" text-anchor="middle" fill="#fff" font-size="18" font-weight="800" font-family="Baloo 2">L</text>
-          </svg>
-        </div>
-        <div class="brand-text">
+        <div class="brand-mark">L</div>
+        <div>
           <h1>Lily</h1>
-          <p>口语陪练 Agent</p>
+          <p>英语口语陪练 Agent</p>
         </div>
       </div>
 
-      <div class="topbar-actions">
-        <!-- 形象切换 -->
-        <div class="avatar-switcher">
-          <button class="avatar-chip active" data-avatar="lily" title="Lily (女)">
-            <span class="chip-face female">👩</span>
-            <span>Lily</span>
-          </button>
-          <button class="avatar-chip" data-avatar="leo" title="Leo (男)">
-            <span class="chip-face male">👨</span>
-            <span>Leo</span>
-          </button>
-        </div>
-
-        <!-- 场景选择 -->
-        <div class="scene-picker">
-          <button class="scene-btn active" data-scene="restaurant">
-            <span class="scene-emoji">🍽️</span>
-            <span class="scene-label">餐厅</span>
-          </button>
-          <button class="scene-btn" data-scene="travel">
-            <span class="scene-emoji">✈️</span>
-            <span class="scene-label">旅行</span>
-          </button>
-          <button class="scene-btn" data-scene="interview">
-            <span class="scene-emoji">💼</span>
-            <span class="scene-label">面试</span>
-          </button>
-        </div>
-
-        <button id="reset-btn" class="icon-btn" title="重置会话">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M3 12a9 9 0 1 0 9-9"/><path d="M3 4v5h5"/>
-          </svg>
-        </button>
+      <div class="topbar-controls">
+        <label class="field-label" for="scenario">场景</label>
+        <select id="scenario">
+          <option value="restaurant">餐厅点餐</option>
+          <option value="travel">旅行问路</option>
+          <option value="interview">面试求职</option>
+        </select>
+        <button id="reset-btn" class="icon-btn" title="重置会话" aria-label="重置会话">↻</button>
       </div>
     </header>
 
-    <!-- ═══ 主工作区 ═══ -->
     <main class="workspace">
-
-      <!-- ─── 左栏：舞台 ─── -->
       <section class="stage-panel">
         <div id="scene-stage" class="scene-stage scene-restaurant">
+          <div class="scene-layer scene-layer-back"></div>
+          <div class="scene-layer scene-layer-mid"></div>
 
-          <!-- 场景背景层 -->
-          <div class="bg-layer bg-sky"></div>
-          <div class="bg-layer bg-decor">
-            <div class="floating-icon f-icon-1">✨</div>
-            <div class="floating-icon f-icon-2">⭐</div>
-            <div class="floating-icon f-icon-3">💬</div>
-            <div class="floating-icon f-icon-4">📚</div>
-            <div class="floating-icon f-icon-5">🎯</div>
-          </div>
-
-          <!-- 连接状态 -->
-          <div class="stage-header">
+          <div class="session-banner">
             <div>
-              <span class="eyebrow">LIVE SESSION</span>
+              <span class="eyebrow">Live session</span>
               <h2 id="scene-title">餐厅点餐</h2>
             </div>
-            <div id="connection-status" class="conn-pill offline">
-              <span class="conn-dot"></span>
-              <span class="conn-text">offline</span>
-            </div>
+            <div id="connection-status" class="connection-pill offline">offline</div>
           </div>
 
-          <!-- 虚拟形象区域 -->
-          <div id="avatar-wrap" class="avatar-wrap" data-avatar="lily" data-state="idle">
-
-            <!-- 光环 -->
+          <div id="avatar-wrap" class="avatar-wrap" data-state="idle">
             <div class="voice-aura"></div>
-
-            <!-- ═══ 女性形象 Lily (日式动漫风) ═══ -->
-            <div class="avatar-character avatar-lily">
-              <!-- 后发 -->
-              <div class="a-hair-back lily-hair-back"></div>
-              <!-- 身体 -->
-              <div class="a-body">
-                <div class="a-shirt lily-shirt"></div>
-                <div class="a-collar"></div>
+            <div class="lily-avatar" aria-hidden="true">
+              <div class="hair back-hair"></div>
+              <div class="neck"></div>
+              <div class="shoulders">
+                <div class="jacket left"></div>
+                <div class="jacket right"></div>
+                <div class="shirt"></div>
               </div>
-              <!-- 脖子 -->
-              <div class="a-neck"></div>
-              <!-- 头部 -->
-              <div class="a-head">
-                <!-- 侧发 -->
-                <div class="a-side-hair side-l"></div>
-                <div class="a-side-hair side-r"></div>
-                <!-- 脸 -->
-                <div class="a-face">
-                  <!-- 腮红 -->
-                  <div class="a-blush blush-l"></div>
-                  <div class="a-blush blush-r"></div>
-                  <!-- 眉毛 -->
-                  <div class="a-brow brow-l"></div>
-                  <div class="a-brow brow-r"></div>
-                  <!-- 大眼睛 -->
-                  <div class="a-eye eye-l">
-                    <div class="eye-iris"><div class="eye-pupil"></div><div class="eye-highlight hl-1"></div><div class="eye-highlight hl-2"></div></div>
-                    <div class="eye-lash lash-top"></div>
-                    <div class="eye-lash lash-corner"></div>
-                  </div>
-                  <div class="a-eye eye-r">
-                    <div class="eye-iris"><div class="eye-pupil"></div><div class="eye-highlight hl-1"></div><div class="eye-highlight hl-2"></div></div>
-                    <div class="eye-lash lash-top"></div>
-                    <div class="eye-lash lash-corner"></div>
-                  </div>
-                  <!-- 鼻子(极小) -->
-                  <div class="a-nose"></div>
-                  <!-- 嘴 -->
-                  <div class="a-mouth"><span class="mouth-inner"></span></div>
-                </div>
-                <!-- 前发/刘海 -->
-                <div class="a-hair-front lily-hair-front">
-                  <div class="anime-bang ab-1"></div>
-                  <div class="anime-bang ab-2"></div>
-                  <div class="anime-bang ab-3"></div>
-                  <div class="anime-bang ab-4"></div>
-                  <div class="anime-bang ab-5"></div>
-                </div>
-                <!-- 发饰 -->
-                <div class="hair-flower"></div>
-              </div>
-            </div>
-
-            <!-- ═══ 男性形象 Leo (日式动漫风) ═══ -->
-            <div class="avatar-character avatar-leo" style="display:none;">
-              <div class="a-hair-back leo-hair-back"></div>
-              <div class="a-body">
-                <div class="a-shirt leo-shirt"></div>
-                <div class="a-collar leo-collar"></div>
-              </div>
-              <div class="a-neck leo-neck"></div>
-              <div class="a-head leo-head">
-                <div class="a-side-hair side-l leo-side"></div>
-                <div class="a-side-hair side-r leo-side"></div>
-                <div class="a-face leo-face">
-                  <div class="a-brow brow-l leo-brow"></div>
-                  <div class="a-brow brow-r leo-brow"></div>
-                  <div class="a-eye eye-l leo-eye">
-                    <div class="eye-iris leo-iris"><div class="eye-pupil"></div><div class="eye-highlight hl-1"></div></div>
-                    <div class="eye-lash lash-top leo-lash"></div>
-                  </div>
-                  <div class="a-eye eye-r leo-eye">
-                    <div class="eye-iris leo-iris"><div class="eye-pupil"></div><div class="eye-highlight hl-1"></div></div>
-                    <div class="eye-lash lash-top leo-lash"></div>
-                  </div>
-                  <div class="a-nose leo-nose"></div>
-                  <div class="a-mouth leo-mouth"><span class="mouth-inner"></span></div>
-                </div>
-                <div class="a-hair-front leo-hair-front">
-                  <div class="anime-bang leo-ab-1"></div>
-                  <div class="anime-bang leo-ab-2"></div>
-                  <div class="anime-bang leo-ab-3"></div>
+              <div class="head">
+                <div class="hair bang bang-left"></div>
+                <div class="hair bang bang-mid"></div>
+                <div class="hair bang bang-right"></div>
+                <div class="ear ear-left"></div>
+                <div class="ear ear-right"></div>
+                <div class="face">
+                  <div class="brow brow-left"></div>
+                  <div class="brow brow-right"></div>
+                  <div class="eye eye-left"></div>
+                  <div class="eye eye-right"></div>
+                  <div class="blush blush-left"></div>
+                  <div class="blush blush-right"></div>
+                  <div class="nose"></div>
+                  <div class="mouth"><span></span></div>
                 </div>
               </div>
             </div>
-
-            <!-- 影子 -->
             <div class="avatar-shadow"></div>
-
-            <!-- 状态表情泡 -->
-            <div class="emotion-bubble" id="emotion-bubble"></div>
           </div>
 
-          <!-- 字幕区 -->
-          <div class="caption-area">
-            <div id="live-caption" class="caption caption-user">Ready</div>
-            <div id="lily-caption" class="caption caption-lily">Hi! I'm Lily. Let's practice! 🎤</div>
+          <div class="caption-stack">
+            <div id="live-caption" class="caption live-caption">Ready</div>
+            <div id="lily-caption" class="caption lily-caption">Hi, I'm Lily. Let's begin.</div>
           </div>
 
-          <!-- 指标条 -->
-          <div class="metrics-row">
-            <div class="metric-chip">
-              <span class="metric-icon">⚡</span>
-              <span class="metric-label">难度</span>
+          <div class="metric-strip">
+            <div class="metric">
+              <span>难度</span>
               <strong id="difficulty-label" class="badge badge-medium">medium</strong>
             </div>
-            <div class="metric-chip">
-              <span class="metric-icon">🔥</span>
-              <span class="metric-label">连错</span>
+            <div class="metric">
+              <span>连错</span>
               <strong id="streak-label">0</strong>
             </div>
-            <div class="metric-chip">
-              <span class="metric-icon">🎯</span>
-              <span class="metric-label">轮次</span>
+            <div class="metric">
+              <span>轮次</span>
               <strong id="turns-label">0</strong>
             </div>
-            <div class="metric-chip">
-              <span class="metric-icon">⭐</span>
-              <span class="metric-label">总分</span>
+            <div class="metric">
+              <span>总分</span>
               <strong id="latest-score">--</strong>
             </div>
           </div>
         </div>
 
-        <!-- 控制栏 -->
-        <footer class="control-bar">
+        <footer class="control-dock">
           <button id="voice-btn" class="voice-btn" aria-pressed="false">
-            <span class="voice-icon-wrap">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                <line x1="12" y1="19" x2="12" y2="23"/>
-                <line x1="8" y1="23" x2="16" y2="23"/>
-              </svg>
-            </span>
-            <span id="voice-btn-label" class="voice-label">Start</span>
+            <span class="voice-dot"></span>
+            <span id="voice-btn-label">Start</span>
           </button>
-
-          <div class="text-input-group">
+          <div class="input-wrap">
             <div id="transcript-preview" class="transcript-preview"></div>
-            <input id="text-input" type="text" autocomplete="off" placeholder="或在这里输入练习...">
+            <input id="text-input" type="text" autocomplete="off" placeholder="Practice your response">
           </div>
-
-          <button id="send-btn" class="send-btn">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="22" y1="2" x2="11" y2="13"/>
-              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-            </svg>
-          </button>
-
-          <button id="interrupt-btn" class="icon-btn icon-btn-sm" title="停止播放">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-              <rect x="6" y="6" width="12" height="12" rx="2"/>
-            </svg>
-          </button>
+          <button id="send-btn" class="send-btn">Send</button>
+          <button id="interrupt-btn" class="icon-btn" title="停止播放" aria-label="停止播放">■</button>
         </footer>
       </section>
 
-      <!-- ─── 中栏：对话记录 ─── -->
       <aside class="dialogue-panel">
         <div class="panel-header">
-          <h2><span class="panel-icon">💬</span> Dialogue</h2>
-          <span id="status-text" class="panel-status">就绪</span>
+          <h2>Dialogue</h2>
+          <span id="status-text">就绪</span>
         </div>
         <div id="messages" class="messages">
           <div class="message lily">
-            <div class="msg-avatar">L</div>
-            <div class="bubble">Welcome! Choose a scene and start speaking when you're ready. 🌟</div>
+            <div class="avatar-mini">L</div>
+            <div class="bubble">Welcome. Choose a scene and start speaking when you are ready.</div>
           </div>
         </div>
       </aside>
 
-      <!-- ─── 右栏：教练反馈 ─── -->
       <aside class="feedback-panel">
         <div class="panel-header">
-          <h2><span class="panel-icon">📊</span> Coach</h2>
-          <span id="coach-state" class="panel-status">waiting</span>
+          <h2>Coach</h2>
+          <span id="coach-state">waiting</span>
         </div>
-
-        <!-- 摘要 -->
         <div id="coach-summary" class="coach-summary">
-          <div class="summary-ring">
-            <svg viewBox="0 0 64 64" class="ring-svg">
-              <circle cx="32" cy="32" r="28" class="ring-bg"/>
-              <circle cx="32" cy="32" r="28" class="ring-fill" id="ring-fill"/>
-            </svg>
-            <div class="summary-score" id="summary-score">--</div>
-          </div>
-          <div class="summary-text">
+          <div class="summary-score">--</div>
+          <div>
             <strong>No review yet</strong>
             <p>Your next evaluated turn will appear here.</p>
           </div>
         </div>
-
-        <!-- 详细反馈 -->
         <div id="feedback-content" class="feedback-content">
-          <div class="feedback-placeholder">
-            <div class="placeholder-icon">🎯</div>
-            <p>完成一轮对话后<br>这里会显示评分和反馈</p>
-          </div>
+          <div class="feedback-placeholder">Awaiting first turn</div>
         </div>
       </aside>
-
     </main>
   </div>
-
-  <!-- 情绪泡动效模板 -->
-  <template id="emoji-pop">
-    <span class="pop-emoji"></span>
-  </template>
 
   <script src="feedback.js"></script>
   <script src="app.js"></script>

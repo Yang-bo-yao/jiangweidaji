@@ -1,13 +1,11 @@
-/* Lily 口语陪练 — 反馈面板渲染 (多邻国风格)
- * 雷达图 + 进度环 + 维度卡片
- */
+/* Feedback panel rendering */
 
 let radarChart = null;
 
 function renderFeedback(evaluation) {
   const container = document.getElementById("feedback-content");
   if (!evaluation || !evaluation.dimensions) {
-    container.innerHTML = '<div class="feedback-placeholder">评估数据异常</div>';
+    container.innerHTML = '<div class="feedback-placeholder">Invalid review</div>';
     return;
   }
 
@@ -25,6 +23,7 @@ function renderFeedback(evaluation) {
     if (!dim) return "";
     const score = Number(dim.score || 0);
     const errors = Array.isArray(dim.errors) ? dim.errors : [];
+
     return `
       <div class="dim-card">
         <div class="dim-header">
@@ -34,11 +33,20 @@ function renderFeedback(evaluation) {
         <div class="dim-bar">
           <div class="dim-bar-fill ${getScoreClass(score)}" style="width: ${score}%"></div>
         </div>
-        ${errors.length > 0
-          ? `<div class="dim-errors">${errors.map(e => `<div class="error-item">⚠️ ${escapeHtml(e)}</div>`).join("")}</div>`
-          : '<div class="dim-ok">✓ 无明显错误</div>'}
-        ${dim.suggestions ? `<div class="dim-suggestions">💡 ${escapeHtml(dim.suggestions)}</div>` : ""}
-      </div>`;
+        ${
+          errors.length > 0
+            ? `<div class="dim-errors">${errors.map((item) =>
+                `<div class="error-item">${escapeHtml(item)}</div>`
+              ).join("")}</div>`
+            : '<div class="dim-ok">无明显错误</div>'
+        }
+        ${
+          dim.suggestions
+            ? `<div class="dim-suggestions">${escapeHtml(dim.suggestions)}</div>`
+            : ""
+        }
+      </div>
+    `;
   }).join("");
 
   container.innerHTML = `
@@ -46,24 +54,35 @@ function renderFeedback(evaluation) {
       <div class="score-label">总分</div>
       <div class="score-value ${getScoreClass(overall)}">${overall}</div>
     </div>
-    <div class="radar-wrapper"><canvas id="radar-chart"></canvas></div>
+    <div class="radar-wrapper">
+      <canvas id="radar-chart"></canvas>
+    </div>
     <div class="dimensions">${dimCards}</div>
-    ${evaluation.corrected_sentence ? `
-      <div class="corrected">
-        <div class="corrected-label">✏️ 推荐表达</div>
-        <div class="corrected-text">${escapeHtml(evaluation.corrected_sentence)}</div>
-      </div>` : ""}
-    ${evaluation.encouragement ? `<div class="encouragement">✨ ${escapeHtml(evaluation.encouragement)}</div>` : ""}
+    ${
+      evaluation.corrected_sentence
+        ? `<div class="corrected">
+            <div class="corrected-label">推荐表达</div>
+            <div class="corrected-text">${escapeHtml(evaluation.corrected_sentence)}</div>
+          </div>`
+        : ""
+    }
+    ${
+      evaluation.encouragement
+        ? `<div class="encouragement">${escapeHtml(evaluation.encouragement)}</div>`
+        : ""
+    }
   `;
 
   renderRadarChart(dims);
-  updateRingProgress(overall);
 }
 
 function renderRadarChart(dims) {
   const ctx = document.getElementById("radar-chart");
   if (!ctx || !window.Chart) return;
-  if (radarChart) radarChart.destroy();
+
+  if (radarChart) {
+    radarChart.destroy();
+  }
 
   radarChart = new Chart(ctx, {
     type: "radar",
@@ -78,89 +97,47 @@ function renderRadarChart(dims) {
           dims.appropriateness?.score || 0,
         ],
         fill: true,
-        backgroundColor: "rgba(88, 204, 2, 0.15)",
-        borderColor: "rgba(88, 204, 2, 0.8)",
-        pointBackgroundColor: "#1cb0f6",
-        pointBorderColor: "#fff",
-        pointHoverBackgroundColor: "#fff",
-        pointHoverBorderColor: "#58cc02",
+        backgroundColor: "rgba(8, 123, 131, 0.16)",
+        borderColor: "rgba(8, 123, 131, 0.9)",
+        pointBackgroundColor: "#e55f4f",
+        pointBorderColor: "#ffffff",
+        pointHoverBackgroundColor: "#ffffff",
+        pointHoverBorderColor: "#087b83",
         pointRadius: 4,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: true,
-      aspectRatio: 1.2,
+      aspectRatio: 1.15,
       scales: {
         r: {
           beginAtZero: true,
           max: 100,
-          ticks: { stepSize: 25, color: "#afafaf", backdropColor: "transparent", font: { size: 9 } },
-          pointLabels: { color: "#3c3c3c", font: { size: 11, weight: "700" } },
-          grid: { color: "rgba(0,0,0,0.06)" },
-          angleLines: { color: "rgba(0,0,0,0.06)" },
+          ticks: {
+            stepSize: 25,
+            color: "#62717f",
+            backdropColor: "transparent",
+            font: { size: 9 },
+          },
+          pointLabels: {
+            color: "#17212b",
+            font: { size: 11, weight: "700" },
+          },
+          grid: { color: "rgba(23, 33, 43, 0.1)" },
+          angleLines: { color: "rgba(23, 33, 43, 0.1)" },
         },
       },
       plugins: {
         legend: { display: false },
-        tooltip: { callbacks: { label: c => `${c.label}: ${c.raw} 分` } },
+        tooltip: {
+          callbacks: {
+            label: (context) => `${context.label}: ${context.raw} 分`,
+          },
+        },
       },
     },
   });
-}
-
-function updateCoachSummary(evaluation) {
-  const score = Number(evaluation.overall_score || 0);
-  const scoreEl = document.getElementById("summary-score");
-  const ringEl = document.getElementById("ring-fill");
-
-  scoreEl.textContent = score;
-  scoreEl.className = `summary-score ${getScoreClass(score)}`;
-
-  // 进度环
-  const circumference = 176;
-  const offset = circumference - (score / 100) * circumference;
-  ringEl.style.strokeDashoffset = offset;
-  ringEl.className = `ring-fill ${getScoreClass(score)}`;
-
-  const summaryText = document.querySelector(".summary-text");
-  summaryText.innerHTML = `
-    <strong>${escapeHtml(evaluation.encouragement || "Nice effort!")}</strong>
-    <p>${escapeHtml(evaluation.corrected_sentence || "Keep practicing!")}</p>
-  `;
-}
-
-function updateRingProgress(score) {
-  const circumference = 176;
-  const offset = circumference - (score / 100) * circumference;
-  const ringEl = document.getElementById("ring-fill");
-  if (ringEl) {
-    ringEl.style.strokeDashoffset = offset;
-    ringEl.className = `ring-fill ${getScoreClass(score)}`;
-  }
-}
-
-function resetFeedbackPanel() {
-  const ringEl = document.getElementById("ring-fill");
-  if (ringEl) {
-    ringEl.style.strokeDashoffset = 176;
-    ringEl.className = "ring-fill";
-  }
-  const scoreEl = document.getElementById("summary-score");
-  if (scoreEl) {
-    scoreEl.textContent = "--";
-    scoreEl.className = "summary-score";
-  }
-  document.querySelector(".summary-text").innerHTML = `
-    <strong>No review yet</strong>
-    <p>Your next evaluated turn will appear here.</p>
-  `;
-  document.getElementById("feedback-content").innerHTML = `
-    <div class="feedback-placeholder">
-      <div class="placeholder-icon">🎯</div>
-      <p>完成一轮对话后<br>这里会显示评分和反馈</p>
-    </div>
-  `;
 }
 
 function getScoreClass(score) {
