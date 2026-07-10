@@ -3,13 +3,16 @@
 Phase 3: LangGraph 状态机编排 — 图结构管理全局状态，自适应难度路由
 """
 
-from fastapi import FastAPI, File, Form, UploadFile
+from typing import Optional
+
+from fastapi import FastAPI, File, Form, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from backend.config import settings
+from backend.conversation import run_text_turn
 from backend.graph.builder import compiled_graph
-from backend.graph.nodes import _get_session_state
+from backend.graph.nodes import _get_session_state, _session_store
 from backend.api.feedback import router as feedback_router
 from backend.prompts.difficulty import SCENARIO_NAMES
 
@@ -44,6 +47,9 @@ class ChatResponse(BaseModel):
     streak_errors: int       # 连续出错次数
     total_turns: int         # 总对话轮次
     tool_calls: list         # 本轮工具调用记录
+    evaluation: Optional[dict] = None
+    emotion: str = "neutral"
+    tts_error: str = ""
 
 
 class SessionStatus(BaseModel):
@@ -75,6 +81,132 @@ async def list_tools():
     """列出所有已注册的 MCP 工具"""
     from backend.mcp.server import list_tools
     return {"tools": list_tools()}
+
+
+# ─── 核心端点: POST /chat/text (文本模式，绕过 ASR/TTS) ───────────
+@app.post("/chat/text", response_model=ChatResponse)
+async def chat_text_endpoint(
+    user_text: str = Form(...),
+    scenario: str = Form(default="restaurant"),
+    session_id: str = Form(default="default"),
+    synthesize_voice: bool = Form(default=True),
+):
+    """
+    文本模式：直接接收用户输入文本，适合浏览器实时语音识别后的对话。
+    """
+    result = await run_text_turn(
+        user_text=user_text,
+        scenario=scenario,
+        session_id=session_id,
+        synthesize_voice=synthesize_voice,
+        push_sse=True,
+    )
+    return ChatResponse(
+        user_text=result["user_text"],
+        reply_text=result["reply_text"],
+        audio_base64=result["audio_base64"],
+        scenario=scenario,
+        session_id=session_id,
+        difficulty=result["difficulty"],
+        streak_errors=result["streak_errors"],
+        total_turns=result["total_turns"],
+        tool_calls=result["tool_calls"],
+        evaluation=result["evaluation"],
+        emotion=result["emotion"],
+        tts_error=result["tts_error"],
+    )
+
+
+@app.websocket("/ws/realtime/{session_id}")
+async def realtime_session(websocket: WebSocket, session_id: str):
+    """Realtime conversation channel for the browser voice stage."""
+    await websocket.accept()
+    await websocket.send_json({
+        "type": "ready",
+        "session_id": session_id,
+        "message": "Realtime session connected",
+    })
+
+    try:
+        while True:
+            payload = await websocket.receive_json()
+            event_type = payload.get("type")
+
+            if event_type == "ping":
+                await websocket.send_json({"type": "pong"})
+                continue
+
+            if event_type == "reset":
+                _session_store.pop(session_id, None)
+                await websocket.send_json({
+                    "type": "session_reset",
+                    "difficulty": "medium",
+                    "streak_errors": 0,
+                    "total_turns": 0,
+                })
+                continue
+
+            if event_type != "user_text":
+                await websocket.send_json({
+                    "type": "error",
+                    "message": f"Unsupported event type: {event_type}",
+                })
+                continue
+
+            user_text = str(payload.get("text", "")).strip()
+            if not user_text:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": "Empty user text",
+                })
+                continue
+
+            scenario = payload.get("scenario", "restaurant")
+            synthesize_voice = bool(payload.get("voice", True))
+
+            await websocket.send_json({
+                "type": "turn_started",
+                "user_text": user_text,
+                "scenario": scenario,
+            })
+            await websocket.send_json({"type": "lily_thinking"})
+
+            try:
+                result = await run_text_turn(
+                    user_text=user_text,
+                    scenario=scenario,
+                    session_id=session_id,
+                    synthesize_voice=synthesize_voice,
+                    push_sse=False,
+                )
+            except Exception as exc:
+                await websocket.send_json({
+                    "type": "error",
+                    "message": str(exc),
+                })
+                continue
+
+            await websocket.send_json({
+                "type": "lily_response",
+                "reply_text": result["reply_text"],
+                "audio_base64": result["audio_base64"],
+                "tool_calls": result["tool_calls"],
+                "tts_error": result["tts_error"],
+            })
+            await websocket.send_json({
+                "type": "evaluation",
+                "evaluation": result["evaluation"],
+                "emotion": result["emotion"],
+            })
+            await websocket.send_json({
+                "type": "turn_complete",
+                "difficulty": result["difficulty"],
+                "streak_errors": result["streak_errors"],
+                "total_turns": result["total_turns"],
+                "emotion": result["emotion"],
+            })
+    except WebSocketDisconnect:
+        return
 
 
 # ─── 核心端点: POST /chat (LangGraph 状态机) ─────────────────────
@@ -142,11 +274,7 @@ async def get_session_status(session_id: str):
 @app.post("/session/{session_id}/reset")
 async def reset_session(session_id: str):
     """重置会话状态"""
-    if session_id in _get_session_state.__wrapped__.__globals__["_session_store"]:
-        del _get_session_state.__wrapped__.__globals__["_session_store"][session_id]
-    from backend.graph.nodes import _session_store
-    if session_id in _session_store:
-        del _session_store[session_id]
+    _session_store.pop(session_id, None)
     return {"status": "ok", "message": "session reset"}
 
 
