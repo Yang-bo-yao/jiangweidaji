@@ -1,17 +1,9 @@
-/* Lily 口语陪练 Agent — 反馈面板渲染 (Phase 5: 雷达图 + 完整反馈)
- * 接收评估 JSON，渲染：
- *   1. 总分大数字
- *   2. 四维雷达图 (Chart.js)
- *   3. 各维度详细卡片 (评分条 + 错误 + 建议)
- *   4. 正确写法
- *   5. 鼓励语
+/* Lily 口语陪练 — 反馈面板渲染 (多邻国风格)
+ * 雷达图 + 进度环 + 维度卡片
  */
 
 let radarChart = null;
 
-/**
- * 渲染评估反馈到右侧面板
- */
 function renderFeedback(evaluation) {
   const container = document.getElementById("feedback-content");
   if (!evaluation || !evaluation.dimensions) {
@@ -20,25 +12,7 @@ function renderFeedback(evaluation) {
   }
 
   const dims = evaluation.dimensions;
-  const overall = evaluation.overall_score || 0;
-
-  // 构建 HTML
-  container.innerHTML = `
-    <div class="overall-score">
-      <div class="score-label">总分</div>
-      <div class="score-value ${getScoreClass(overall)}">${overall}</div>
-    </div>
-    <div class="radar-wrapper">
-      <canvas id="radar-chart"></canvas>
-    </div>
-    <div class="dimensions"></div>
-  `;
-
-  // 渲染雷达图
-  renderRadarChart(dims);
-
-  // 渲染维度卡片
-  const dimsContainer = container.querySelector(".dimensions");
+  const overall = Number(evaluation.overall_score || 0);
   const dimNames = {
     grammar: "语法",
     vocabulary: "词汇",
@@ -46,80 +20,73 @@ function renderFeedback(evaluation) {
     appropriateness: "得体性",
   };
 
-  for (const [key, name] of Object.entries(dimNames)) {
-    const d = dims[key];
-    if (!d) continue;
-    dimsContainer.innerHTML += `
+  const dimCards = Object.entries(dimNames).map(([key, name]) => {
+    const dim = dims[key];
+    if (!dim) return "";
+    const score = Number(dim.score || 0);
+    const errors = Array.isArray(dim.errors) ? dim.errors : [];
+    return `
       <div class="dim-card">
         <div class="dim-header">
           <span class="dim-name">${name}</span>
-          <span class="dim-score ${getScoreClass(d.score)}">${d.score}</span>
+          <span class="dim-score ${getScoreClass(score)}">${score}</span>
         </div>
         <div class="dim-bar">
-          <div class="dim-bar-fill ${getScoreClass(d.score)}" style="width: ${d.score}%"></div>
+          <div class="dim-bar-fill ${getScoreClass(score)}" style="width: ${score}%"></div>
         </div>
-        ${d.errors && d.errors.length > 0 ? `
-          <div class="dim-errors">
-            ${d.errors.map(e => `<div class="error-item">⚠️ ${escapeHtml(e)}</div>`).join("")}
-          </div>
-        ` : '<div class="dim-ok">✓ 无明显错误</div>'}
-        ${d.suggestions ? `<div class="dim-suggestions">💡 ${escapeHtml(d.suggestions)}</div>` : ""}
-      </div>
-    `;
-  }
+        ${errors.length > 0
+          ? `<div class="dim-errors">${errors.map(e => `<div class="error-item">⚠️ ${escapeHtml(e)}</div>`).join("")}</div>`
+          : '<div class="dim-ok">✓ 无明显错误</div>'}
+        ${dim.suggestions ? `<div class="dim-suggestions">💡 ${escapeHtml(dim.suggestions)}</div>` : ""}
+      </div>`;
+  }).join("");
 
-  // 正确写法
-  if (evaluation.corrected_sentence) {
-    container.innerHTML += `
+  container.innerHTML = `
+    <div class="overall-score">
+      <div class="score-label">总分</div>
+      <div class="score-value ${getScoreClass(overall)}">${overall}</div>
+    </div>
+    <div class="radar-wrapper"><canvas id="radar-chart"></canvas></div>
+    <div class="dimensions">${dimCards}</div>
+    ${evaluation.corrected_sentence ? `
       <div class="corrected">
-        <div class="corrected-label">✏️ 正确写法</div>
+        <div class="corrected-label">✏️ 推荐表达</div>
         <div class="corrected-text">${escapeHtml(evaluation.corrected_sentence)}</div>
-      </div>
-    `;
-  }
+      </div>` : ""}
+    ${evaluation.encouragement ? `<div class="encouragement">✨ ${escapeHtml(evaluation.encouragement)}</div>` : ""}
+  `;
 
-  // 鼓励语
-  if (evaluation.encouragement) {
-    container.innerHTML += `<div class="encouragement">✨ ${escapeHtml(evaluation.encouragement)}</div>`;
-  }
+  renderRadarChart(dims);
+  updateRingProgress(overall);
 }
 
-/**
- * 用 Chart.js 渲染四维雷达图
- */
 function renderRadarChart(dims) {
   const ctx = document.getElementById("radar-chart");
-  if (!ctx) return;
-
-  // 销毁旧图表
-  if (radarChart) {
-    radarChart.destroy();
-  }
-
-  const data = {
-    labels: ["语法", "词汇", "流利度", "得体性"],
-    datasets: [{
-      label: "评分",
-      data: [
-        dims.grammar?.score || 0,
-        dims.vocabulary?.score || 0,
-        dims.fluency?.score || 0,
-        dims.appropriateness?.score || 0,
-      ],
-      fill: true,
-      backgroundColor: "rgba(102, 126, 234, 0.15)",
-      borderColor: "rgba(102, 126, 234, 0.8)",
-      pointBackgroundColor: "rgba(102, 126, 234, 1)",
-      pointBorderColor: "#fff",
-      pointHoverBackgroundColor: "#fff",
-      pointHoverBorderColor: "rgba(102, 126, 234, 1)",
-      pointRadius: 4,
-    }],
-  };
+  if (!ctx || !window.Chart) return;
+  if (radarChart) radarChart.destroy();
 
   radarChart = new Chart(ctx, {
     type: "radar",
-    data: data,
+    data: {
+      labels: ["语法", "词汇", "流利度", "得体性"],
+      datasets: [{
+        label: "评分",
+        data: [
+          dims.grammar?.score || 0,
+          dims.vocabulary?.score || 0,
+          dims.fluency?.score || 0,
+          dims.appropriateness?.score || 0,
+        ],
+        fill: true,
+        backgroundColor: "rgba(88, 204, 2, 0.15)",
+        borderColor: "rgba(88, 204, 2, 0.8)",
+        pointBackgroundColor: "#1cb0f6",
+        pointBorderColor: "#fff",
+        pointHoverBackgroundColor: "#fff",
+        pointHoverBorderColor: "#58cc02",
+        pointRadius: 4,
+      }],
+    },
     options: {
       responsive: true,
       maintainAspectRatio: true,
@@ -128,38 +95,82 @@ function renderRadarChart(dims) {
         r: {
           beginAtZero: true,
           max: 100,
-          ticks: { stepSize: 25, font: { size: 9 }, backdropColor: "transparent" },
-          pointLabels: { font: { size: 11, weight: "600" }, color: "#333" },
-          grid: { color: "rgba(0,0,0,0.08)" },
-          angleLines: { color: "rgba(0,0,0,0.08)" },
+          ticks: { stepSize: 25, color: "#afafaf", backdropColor: "transparent", font: { size: 9 } },
+          pointLabels: { color: "#3c3c3c", font: { size: 11, weight: "700" } },
+          grid: { color: "rgba(0,0,0,0.06)" },
+          angleLines: { color: "rgba(0,0,0,0.06)" },
         },
       },
       plugins: {
         legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (ctx) => `${ctx.label}: ${ctx.raw} 分`,
-          },
-        },
+        tooltip: { callbacks: { label: c => `${c.label}: ${c.raw} 分` } },
       },
     },
   });
 }
 
-/**
- * 根据分数返回样式类名
- */
+function updateCoachSummary(evaluation) {
+  const score = Number(evaluation.overall_score || 0);
+  const scoreEl = document.getElementById("summary-score");
+  const ringEl = document.getElementById("ring-fill");
+
+  scoreEl.textContent = score;
+  scoreEl.className = `summary-score ${getScoreClass(score)}`;
+
+  // 进度环
+  const circumference = 176;
+  const offset = circumference - (score / 100) * circumference;
+  ringEl.style.strokeDashoffset = offset;
+  ringEl.className = `ring-fill ${getScoreClass(score)}`;
+
+  const summaryText = document.querySelector(".summary-text");
+  summaryText.innerHTML = `
+    <strong>${escapeHtml(evaluation.encouragement || "Nice effort!")}</strong>
+    <p>${escapeHtml(evaluation.corrected_sentence || "Keep practicing!")}</p>
+  `;
+}
+
+function updateRingProgress(score) {
+  const circumference = 176;
+  const offset = circumference - (score / 100) * circumference;
+  const ringEl = document.getElementById("ring-fill");
+  if (ringEl) {
+    ringEl.style.strokeDashoffset = offset;
+    ringEl.className = `ring-fill ${getScoreClass(score)}`;
+  }
+}
+
+function resetFeedbackPanel() {
+  const ringEl = document.getElementById("ring-fill");
+  if (ringEl) {
+    ringEl.style.strokeDashoffset = 176;
+    ringEl.className = "ring-fill";
+  }
+  const scoreEl = document.getElementById("summary-score");
+  if (scoreEl) {
+    scoreEl.textContent = "--";
+    scoreEl.className = "summary-score";
+  }
+  document.querySelector(".summary-text").innerHTML = `
+    <strong>No review yet</strong>
+    <p>Your next evaluated turn will appear here.</p>
+  `;
+  document.getElementById("feedback-content").innerHTML = `
+    <div class="feedback-placeholder">
+      <div class="placeholder-icon">🎯</div>
+      <p>完成一轮对话后<br>这里会显示评分和反馈</p>
+    </div>
+  `;
+}
+
 function getScoreClass(score) {
   if (score >= 85) return "score-high";
   if (score >= 70) return "score-mid";
   return "score-low";
 }
 
-/**
- * HTML 转义防注入
- */
 function escapeHtml(text) {
   const div = document.createElement("div");
-  div.textContent = text;
+  div.textContent = String(text ?? "");
   return div.innerHTML;
 }

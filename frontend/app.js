@@ -1,250 +1,425 @@
-/* Lily 口语陪练 Agent — 前端主逻辑 (Phase 5: 完整版)
- * 双通道接收 + 录音波形 + 场景切换 + 会话重置 + 难度徽章
+/* Lily 口语陪练 — 主逻辑 (多邻国风格版)
+ * 后端接口完全兼容 fork 版本，不改后端
  */
 
-const API_BASE = "http://localhost:8000";
+const API_BASE = window.LILY_API_BASE || "http://localhost:8020";
+const WS_BASE = API_BASE.replace(/^http/, "ws");
 
-// ─── DOM 元素 ───────────────────────────────────────────────────
-const recordBtn = document.getElementById("record-btn");
-const messagesDiv = document.getElementById("messages");
+const SCENES = {
+  restaurant: { title: "餐厅点餐", className: "scene-restaurant", intro: "Good evening! Do you have a reservation, or would you like a table for tonight?" },
+  travel: { title: "旅行问路", className: "scene-travel", intro: "Hi there! Where would you like to go? I can help you find the way." },
+  interview: { title: "面试求职", className: "scene-interview", intro: "Welcome! Please start by telling me a little about yourself." },
+};
+
+const sessionId = `session_${Date.now()}`;
+let currentAvatar = "lily";
+
+// DOM
+const sceneStage = document.getElementById("scene-stage");
+const sceneTitle = document.getElementById("scene-title");
+const avatarWrap = document.getElementById("avatar-wrap");
+const liveCaption = document.getElementById("live-caption");
+const lilyCaption = document.getElementById("lily-caption");
+const connectionStatus = document.getElementById("connection-status");
 const statusText = document.getElementById("status-text");
-const scenarioSelect = document.getElementById("scenario");
+const coachState = document.getElementById("coach-state");
+const coachSummary = document.getElementById("coach-summary");
+const latestScore = document.getElementById("latest-score");
+const scenarioSelect = document.querySelector(".scene-picker");
 const resetBtn = document.getElementById("reset-btn");
-const waveform = document.getElementById("waveform");
+const voiceBtn = document.getElementById("voice-btn");
+const voiceBtnLabel = document.getElementById("voice-btn-label");
+const sendBtn = document.getElementById("send-btn");
+const interruptBtn = document.getElementById("interrupt-btn");
+const textInput = document.getElementById("text-input");
+const transcriptPreview = document.getElementById("transcript-preview");
+const messagesDiv = document.getElementById("messages");
+const emotionBubble = document.getElementById("emotion-bubble");
 
-// ─── 会话状态 ───────────────────────────────────────────────────
-const sessionId = "session_" + Date.now();
-let mediaRecorder = null;
-let audioChunks = [];
-let isRecording = false;
+let ws = null, reconnectTimer = null, recognition = null;
+let recognitionSupported = false, voiceActive = false;
+let isRecognizing = false, isProcessing = false, isSpeaking = false;
+let finalTranscriptBuffer = "", silenceTimer = null, currentAudio = null;
 
-// ─── SSE: 评估反馈通道 ──────────────────────────────────────────
-let feedbackEventSource = null;
+init();
 
-function connectFeedbackSSE() {
-  if (feedbackEventSource) {
-    feedbackEventSource.close();
+function init() {
+  applyScene("restaurant", { resetDialogue: false });
+  setupRecognition();
+  bindEvents();
+  connectRealtime();
+  setAvatarState("idle");
+  animatePageLoad();
+}
+
+function animatePageLoad() {
+  if (typeof gsap !== "undefined") {
+    gsap.from(".topbar", { y: -60, opacity: 0, duration: 0.5, ease: "power2.out" });
+    gsap.from(".stage-panel", { x: -30, opacity: 0, duration: 0.5, delay: 0.1, ease: "power2.out" });
+    gsap.from(".dialogue-panel", { y: 30, opacity: 0, duration: 0.5, delay: 0.2, ease: "power2.out" });
+    gsap.from(".feedback-panel", { x: 30, opacity: 0, duration: 0.5, delay: 0.3, ease: "power2.out" });
+    gsap.from(".avatar-character", { scale: 0.5, opacity: 0, duration: 0.6, delay: 0.4, ease: "back.out(1.7)" });
+    gsap.from(".metric-chip", { y: 20, opacity: 0, duration: 0.4, delay: 0.5, stagger: 0.08, ease: "power2.out" });
   }
-  feedbackEventSource = new EventSource(`${API_BASE}/api/feedback/${sessionId}`);
+}
 
-  feedbackEventSource.addEventListener("evaluation", (event) => {
-    const evaluation = JSON.parse(event.data);
-    renderFeedback(evaluation);
-    statusText.textContent = "评估完成 ✓";
-    statusText.parentElement.classList.remove("loading");
+function bindEvents() {
+  voiceBtn.addEventListener("click", () => voiceActive ? stopListening({ manual: true }) : startListening());
+  sendBtn.addEventListener("click", sendTypedMessage);
+  textInput.addEventListener("keydown", e => { if (e.key === "Enter") sendTypedMessage(); });
+  interruptBtn.addEventListener("click", () => interruptPlayback());
+
+  // 场景按钮
+  document.querySelectorAll(".scene-btn").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      document.querySelectorAll(".scene-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      const scene = btn.dataset.scene;
+      await resetSession();
+      applyScene(scene, { resetDialogue: true });
+      animateSceneTransition();
+    });
   });
 
-  feedbackEventSource.addEventListener("timeout", () => {});
-
-  feedbackEventSource.onerror = () => {};
-}
-
-connectFeedbackSSE();
-
-// ─── 录音逻辑 ───────────────────────────────────────────────────
-
-async function initRecorder() {
-  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-    ? "audio/webm"
-    : "audio/mp4";
-
-  mediaRecorder = new MediaRecorder(stream, { mimeType });
-  audioChunks = [];
-
-  mediaRecorder.ondataavailable = (e) => {
-    if (e.data.size > 0) audioChunks.push(e.data);
-  };
-
-  mediaRecorder.onstop = async () => {
-    const audioBlob = new Blob(audioChunks, { type: mimeType });
-    await sendAudio(audioBlob);
-    audioChunks = [];
-  };
-}
-
-function startRecording() {
-  if (!mediaRecorder || isRecording) return;
-  mediaRecorder.start();
-  isRecording = true;
-  recordBtn.classList.add("recording");
-  recordBtn.querySelector(".btn-text").textContent = "松开发送";
-  waveform.classList.remove("hidden");
-  statusText.textContent = "录音中...";
-  statusText.parentElement.classList.add("recording");
-}
-
-function stopRecording() {
-  if (!mediaRecorder || !isRecording) return;
-  mediaRecorder.stop();
-  isRecording = false;
-  recordBtn.classList.remove("recording");
-  recordBtn.querySelector(".btn-text").textContent = "按住说话";
-  waveform.classList.add("hidden");
-  statusText.textContent = "Lily 思考中...";
-  statusText.parentElement.classList.remove("recording");
-  statusText.parentElement.classList.add("loading");
-}
-
-// 鼠标事件
-recordBtn.addEventListener("mousedown", startRecording);
-recordBtn.addEventListener("mouseup", stopRecording);
-recordBtn.addEventListener("mouseleave", () => {
-  if (isRecording) stopRecording();
-});
-
-// 触摸事件
-recordBtn.addEventListener("touchstart", (e) => {
-  e.preventDefault();
-  startRecording();
-});
-recordBtn.addEventListener("touchend", (e) => {
-  e.preventDefault();
-  stopRecording();
-});
-
-// ─── 场景切换：重置对话 ─────────────────────────────────────────
-scenarioSelect.addEventListener("change", async () => {
-  // 清空对话区
-  messagesDiv.innerHTML = `
-    <div class="message lily">
-      <div class="avatar">🌸</div>
-      <div class="bubble">
-        场景已切换！Let's start a new conversation. 🎤
-      </div>
-    </div>
-  `;
-  // 清空反馈面板
-  document.getElementById("feedback-content").innerHTML = `
-    <div class="feedback-placeholder">
-      🎤 按住下方按钮说话<br><br>
-      说完后这里会显示<br>评分雷达图和纠错建议
-    </div>
-  `;
-  // 重置后端会话
-  try {
-    await fetch(`${API_BASE}/session/${sessionId}/reset`, { method: "POST" });
-    updateStatusBar({ difficulty: "medium", streak_errors: 0, total_turns: 0 });
-  } catch (e) {
-    console.error("重置会话失败:", e);
-  }
-});
-
-// ─── 重置按钮 ───────────────────────────────────────────────────
-resetBtn.addEventListener("click", async () => {
-  scenarioSelect.dispatchEvent(new Event("change"));
-});
-
-// ─── 发送音频 (通道1: HTTP POST) ────────────────────────────────
-
-async function sendAudio(audioBlob) {
-  const formData = new FormData();
-  const ext = audioBlob.type.includes("webm") ? "webm" : "mp4";
-  formData.append("audio", audioBlob, `audio.${ext}`);
-  formData.append("scenario", scenarioSelect.value);
-  formData.append("session_id", sessionId);
-
-  try {
-    const response = await fetch(`${API_BASE}/chat`, {
-      method: "POST",
-      body: formData,
+  // 形象切换
+  document.querySelectorAll(".avatar-chip").forEach(btn => {
+    btn.addEventListener("click", () => {
+      document.querySelectorAll(".avatar-chip").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      switchAvatar(btn.dataset.avatar);
     });
+  });
 
-    if (!response.ok) {
-      const err = await response.text();
-      throw new Error(`API ${response.status}: ${err}`);
-    }
+  resetBtn.addEventListener("click", resetSession);
+}
 
-    const data = await response.json();
+function switchAvatar(name) {
+  currentAvatar = name;
+  avatarWrap.dataset.avatar = name;
 
-    // 显示用户说的内容
-    appendMessage("user", data.user_text);
+  const lilyChar = document.querySelector(".avatar-lily");
+  const leoChar = document.querySelector(".avatar-leo");
 
-    // 显示 Lily 的回复（含工具调用信息）
-    appendMessage("lily", data.reply_text, data.tool_calls);
+  if (typeof gsap !== "undefined") {
+    const showChar = name === "leo" ? leoChar : lilyChar;
+    const hideChar = name === "leo" ? lilyChar : leoChar;
 
-    // 播放 TTS 音频
-    playAudio(data.audio_base64);
+    gsap.to(hideChar, { opacity: 0, scale: 0.5, duration: 0.25, onComplete: () => {
+      hideChar.style.display = "none";
+      showChar.style.display = "";
+      gsap.fromTo(showChar, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 0.35, ease: "back.out(1.7)" });
+    }});
+  } else {
+    lilyChar.style.display = name === "lily" ? "" : "none";
+    leoChar.style.display = name === "leo" ? "" : "none";
+  }
 
-    // 更新状态栏
-    updateStatusBar(data);
+  showEmotion(name === "leo" ? "👨" : "👩");
+}
 
-    // 对话已返回，等待 SSE 推送评估反馈
-    statusText.textContent = "等待评估反馈...";
-
-    // 重新连接 SSE
-    setTimeout(() => connectFeedbackSSE(), 500);
-
-  } catch (err) {
-    console.error("请求失败:", err);
-    statusText.textContent = "出错了: " + err.message;
-    statusText.parentElement.classList.remove("loading");
-    statusText.parentElement.classList.add("recording");
+function animateSceneTransition() {
+  if (typeof gsap !== "undefined") {
+    gsap.fromTo(".scene-stage", { opacity: 0.4 }, { opacity: 1, duration: 0.5, ease: "power2.out" });
+    gsap.fromTo(".bg-decor", { scale: 1.1 }, { scale: 1, duration: 0.6, ease: "power2.out" });
   }
 }
 
-// ─── UI 辅助 ────────────────────────────────────────────────────
+function showEmotion(emoji) {
+  emotionBubble.textContent = emoji;
+  emotionBubble.classList.add("show");
+  if (typeof gsap !== "undefined") {
+    gsap.fromTo(emotionBubble, { scale: 0, rotation: -20 }, { scale: 1, rotation: 0, duration: 0.4, ease: "back.out(2)" });
+  }
+  setTimeout(() => emotionBubble.classList.remove("show"), 2000);
+}
+
+function connectRealtime() {
+  clearTimeout(reconnectTimer);
+  setConnection("connecting");
+  ws = new WebSocket(`${WS_BASE}/ws/realtime/${sessionId}`);
+
+  ws.addEventListener("open", () => setConnection("online"));
+  ws.addEventListener("message", e => {
+    try { handleRealtimeEvent(JSON.parse(e.data)); }
+    catch { setStatus("Invalid realtime event"); }
+  });
+  ws.addEventListener("close", () => { setConnection("offline"); reconnectTimer = setTimeout(connectRealtime, 1800); });
+  ws.addEventListener("error", () => setConnection("offline"));
+}
+
+function handleRealtimeEvent(payload) {
+  switch (payload.type) {
+    case "ready": setConnection("online"); break;
+    case "session_reset": updateStatusBar(payload); setStatus("就绪"); break;
+    case "turn_started": coachState.textContent = "reviewing"; setStatus("Lily 思考中"); break;
+    case "lily_thinking": setAvatarState("thinking"); setStatus("Lily 思考中"); break;
+    case "lily_response": handleLilyResponse(payload); break;
+    case "evaluation": handleEvaluation(payload.evaluation, payload.emotion); break;
+    case "turn_complete": handleTurnComplete(payload); break;
+    case "error": handleRealtimeError(payload.message || "Error"); break;
+  }
+}
+
+function setupRecognition() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  recognitionSupported = Boolean(SR);
+  if (!recognitionSupported) { voiceBtn.disabled = true; voiceBtnLabel.textContent = "Voice off"; return; }
+
+  recognition = new SR();
+  recognition.lang = "en-US";
+  recognition.continuous = true;
+  recognition.interimResults = true;
+  recognition.maxAlternatives = 1;
+
+  recognition.onstart = () => { isRecognizing = true; setAvatarState("listening"); setStatus("Listening"); showEmotion("🎤"); };
+  recognition.onresult = (e) => {
+    let interim = "", finalText = "";
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript.trim();
+      if (e.results[i].isFinal) finalText += ` ${t}`;
+      else interim += ` ${t}`;
+    }
+    if (finalText.trim()) { finalTranscriptBuffer = `${finalTranscriptBuffer} ${finalText}`.trim(); scheduleTranscriptCommit(); }
+    const preview = [finalTranscriptBuffer, interim.trim()].filter(Boolean).join(" ");
+    transcriptPreview.textContent = preview;
+    liveCaption.textContent = preview || "Listening";
+  };
+  recognition.onerror = (e) => { if (e.error !== "no-speech" && e.error !== "aborted") setStatus(`语音识别错误: ${e.error}`); };
+  recognition.onend = () => { isRecognizing = false; if (voiceActive && !isProcessing && !isSpeaking) setTimeout(() => startListening({ resume: true }), 260); };
+}
+
+function startListening({ resume = false } = {}) {
+  if (!recognitionSupported || isRecognizing || isProcessing || isSpeaking) return;
+  voiceActive = true;
+  voiceBtn.classList.add("active");
+  voiceBtn.setAttribute("aria-pressed", "true");
+  voiceBtnLabel.textContent = "Stop";
+  try { recognition.start(); if (!resume) { liveCaption.textContent = "Listening"; transcriptPreview.textContent = ""; } }
+  catch { setStatus("语音识别启动失败"); }
+}
+
+function stopListening({ manual = false } = {}) {
+  clearTimeout(silenceTimer);
+  if (manual) {
+    voiceActive = false;
+    voiceBtn.classList.remove("active");
+    voiceBtn.setAttribute("aria-pressed", "false");
+    voiceBtnLabel.textContent = "Start";
+    setAvatarState("idle");
+    setStatus("就绪");
+  }
+  if (isRecognizing && recognition) recognition.stop();
+}
+
+function scheduleTranscriptCommit() {
+  clearTimeout(silenceTimer);
+  silenceTimer = setTimeout(() => {
+    const text = finalTranscriptBuffer.trim();
+    finalTranscriptBuffer = "";
+    transcriptPreview.textContent = "";
+    if (text) sendTurn(text, "voice");
+  }, 850);
+}
+
+function sendTypedMessage() {
+  const text = textInput.value.trim();
+  if (!text) return;
+  textInput.value = "";
+  sendTurn(text, "text");
+}
+
+function sendTurn(text, source) {
+  const clean = text.replace(/\s+/g, " ").trim();
+  if (!clean || isProcessing) return;
+  stopListening({ manual: false });
+  isProcessing = true;
+  coachState.textContent = "reviewing";
+  setAvatarState("thinking");
+  setStatus(source === "voice" ? "识别完成" : "Lily 思考中");
+  liveCaption.textContent = clean;
+  appendMessage("user", clean);
+
+  const msg = { type: "user_text", text: clean, scenario: getCurrentScene(), voice: true };
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+  else sendHttpTurn(clean);
+}
+
+function getCurrentScene() {
+  const active = document.querySelector(".scene-btn.active");
+  return active ? active.dataset.scene : "restaurant";
+}
+
+async function sendHttpTurn(text) {
+  const fd = new FormData();
+  fd.append("user_text", text);
+  fd.append("scenario", getCurrentScene());
+  fd.append("session_id", sessionId);
+  fd.append("synthesize_voice", "true");
+  try {
+    const r = await fetch(`${API_BASE}/chat/text`, { method: "POST", body: fd });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    await handleLilyResponse({ type: "lily_response", reply_text: d.reply_text, audio_base64: d.audio_base64, tool_calls: d.tool_calls });
+    if (d.evaluation) handleEvaluation(d.evaluation, d.emotion);
+    handleTurnComplete(d);
+  } catch (e) { handleRealtimeError(e.message || "Request failed"); }
+}
+
+async function handleLilyResponse(payload) {
+  const reply = payload.reply_text || "";
+  appendMessage("lily", reply, payload.tool_calls || []);
+  lilyCaption.textContent = reply;
+  setStatus("Lily speaking");
+  setAvatarState("speaking");
+  await playLilyReply(reply, payload.audio_base64);
+  if (isProcessing) { setAvatarState("reviewing"); setStatus("Reviewing"); }
+}
+
+function handleEvaluation(evaluation, emotion) {
+  if (!evaluation) return;
+  renderFeedback(evaluation);
+  updateCoachSummary(evaluation);
+  latestScore.textContent = evaluation.overall_score ?? "--";
+  coachState.textContent = "ready";
+
+  const score = Number(evaluation.overall_score || 0);
+  if (emotion === "confident" || score >= 85) { setAvatarState("happy"); showEmotion("🌟"); }
+  else if (emotion === "frustrated" || score < 70) { setAvatarState("concerned"); showEmotion("💪"); }
+  else { setAvatarState("reviewing"); showEmotion("📝"); }
+}
+
+function handleTurnComplete(payload) {
+  isProcessing = false;
+  updateStatusBar(payload);
+  setStatus("就绪");
+  if (!isSpeaking && voiceActive) startListening({ resume: true });
+}
+
+function handleRealtimeError(msg) {
+  isProcessing = false;
+  setAvatarState(voiceActive ? "listening" : "idle");
+  setStatus(`出错了: ${msg}`);
+  if (voiceActive && !isSpeaking) startListening({ resume: true });
+}
+
+async function playLilyReply(text, audioBase64) {
+  interruptPlayback({ keepState: true });
+  isSpeaking = true;
+  try {
+    if (audioBase64) await playAudioBase64(audioBase64);
+    else await speakWithBrowser(text);
+  } finally {
+    isSpeaking = false;
+    if (!isProcessing && voiceActive) startListening({ resume: true });
+  }
+}
+
+function playAudioBase64(b64) {
+  return new Promise(resolve => {
+    const bytes = atob(b64);
+    const buf = new Uint8Array(bytes.length);
+    for (let i = 0; i < bytes.length; i++) buf[i] = bytes.charCodeAt(i);
+    const blob = new Blob([buf], { type: "audio/mp3" });
+    const url = URL.createObjectURL(blob);
+    currentAudio = new Audio(url);
+    currentAudio.onended = () => { URL.revokeObjectURL(url); currentAudio = null; resolve(); };
+    currentAudio.onerror = () => { URL.revokeObjectURL(url); currentAudio = null; resolve(); };
+    currentAudio.play().catch(() => { URL.revokeObjectURL(url); currentAudio = null; resolve(); });
+  });
+}
+
+function speakWithBrowser(text) {
+  return new Promise(resolve => {
+    if (!("speechSynthesis" in window) || !text) return resolve();
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "en-US"; u.rate = 0.94; u.pitch = 1.08;
+    const voices = window.speechSynthesis.getVoices();
+    const v = voices.find(v => /female|samantha|jenny|aria|natural|english/i.test(v.name)) || voices.find(v => v.lang?.startsWith("en"));
+    if (v) u.voice = v;
+    u.onend = resolve; u.onerror = resolve;
+    window.speechSynthesis.cancel();
+    window.speechSynthesis.speak(u);
+  });
+}
+
+function interruptPlayback(options = {}) {
+  const keepState = Boolean(options.keepState);
+  if (currentAudio) { currentAudio.pause(); currentAudio.currentTime = 0; currentAudio = null; }
+  if ("speechSynthesis" in window) window.speechSynthesis.cancel();
+  isSpeaking = false;
+  if (!keepState) { setAvatarState(voiceActive ? "listening" : "idle"); if (voiceActive) startListening({ resume: true }); }
+}
+
+async function resetSession() {
+  interruptPlayback();
+  stopListening({ manual: false });
+  finalTranscriptBuffer = "";
+  transcriptPreview.textContent = "";
+  liveCaption.textContent = "Ready";
+  lilyCaption.textContent = "Let's begin!";
+  latestScore.textContent = "--";
+  coachState.textContent = "waiting";
+  updateStatusBar({ difficulty: "medium", streak_errors: 0, total_turns: 0 });
+  resetFeedbackPanel();
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "reset" }));
+  else { try { await fetch(`${API_BASE}/session/${sessionId}/reset`, { method: "POST" }); } catch { setStatus("重置失败"); } }
+  isProcessing = false;
+  setAvatarState("idle");
+  setStatus("就绪");
+}
+
+function applyScene(scenario, { resetDialogue = true } = {}) {
+  const scene = SCENES[scenario] || SCENES.restaurant;
+  sceneTitle.textContent = scene.title;
+  lilyCaption.textContent = scene.intro;
+  sceneStage.className = `scene-stage ${scene.className}`;
+  if (resetDialogue) {
+    messagesDiv.innerHTML = "";
+    appendMessage("lily", scene.intro);
+  }
+}
 
 function appendMessage(role, text, toolCalls) {
   const msgDiv = document.createElement("div");
   msgDiv.className = `message ${role}`;
 
   const avatar = document.createElement("div");
-  avatar.className = "avatar";
-  avatar.textContent = role === "lily" ? "🌸" : "🧑";
+  avatar.className = "msg-avatar";
+  avatar.textContent = role === "lily" ? (currentAvatar === "leo" ? "L" : "L") : "U";
 
   const bubble = document.createElement("div");
   bubble.className = "bubble";
   bubble.textContent = text;
 
-  // 工具调用展示
   if (toolCalls && toolCalls.length > 0) {
     const toolDiv = document.createElement("div");
     toolDiv.className = "tool-calls";
-
-    const toolLabel = document.createElement("div");
-    toolLabel.className = "tool-label";
-    toolLabel.textContent = `🔧 工具调用 (${toolCalls.length})`;
-    toolDiv.appendChild(toolLabel);
-
+    const label = document.createElement("div");
+    label.className = "tool-label";
+    label.textContent = `🔧 Tool calls (${toolCalls.length})`;
+    toolDiv.appendChild(label);
     for (const tc of toolCalls) {
       const item = document.createElement("div");
       item.className = "tool-item";
-
       const name = document.createElement("span");
       name.className = "tool-name";
       name.textContent = tc.name;
-
       const args = document.createElement("span");
       args.className = "tool-args";
-      args.textContent = JSON.stringify(tc.arguments);
-
-      item.appendChild(name);
-      item.appendChild(args);
+      args.textContent = JSON.stringify(tc.arguments || {});
+      item.append(name, args);
       toolDiv.appendChild(item);
     }
     bubble.appendChild(toolDiv);
   }
 
-  msgDiv.appendChild(avatar);
-  msgDiv.appendChild(bubble);
+  msgDiv.append(avatar, bubble);
   messagesDiv.appendChild(msgDiv);
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 
-  messagesDiv.parentElement.scrollTop = messagesDiv.parentElement.scrollHeight;
-}
-
-function playAudio(base64Audio) {
-  const audioBytes = atob(base64Audio);
-  const arrayBuffer = new Uint8Array(audioBytes.length);
-  for (let i = 0; i < audioBytes.length; i++) {
-    arrayBuffer[i] = audioBytes.charCodeAt(i);
+  if (typeof gsap !== "undefined") {
+    gsap.from(msgDiv, { y: 15, opacity: 0, duration: 0.3, ease: "power2.out" });
   }
-
-  const blob = new Blob([arrayBuffer], { type: "audio/mp3" });
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  audio.play();
-  audio.onended = () => URL.revokeObjectURL(url);
 }
 
 function updateStatusBar(data) {
@@ -253,17 +428,17 @@ function updateStatusBar(data) {
     dl.textContent = data.difficulty;
     dl.className = `badge badge-${data.difficulty}`;
   }
-  if (data.streak_errors !== undefined) {
-    document.getElementById("streak-label").textContent = data.streak_errors;
-  }
-  if (data.total_turns !== undefined) {
-    document.getElementById("turns-label").textContent = data.total_turns;
-  }
+  if (data.streak_errors !== undefined) document.getElementById("streak-label").textContent = data.streak_errors;
+  if (data.total_turns !== undefined) document.getElementById("turns-label").textContent = data.total_turns;
 }
 
-// ─── 初始化 ─────────────────────────────────────────────────────
-initRecorder().catch((err) => {
-  console.error("麦克风初始化失败:", err);
-  statusText.textContent = "麦克风访问失败，请检查权限";
-  recordBtn.disabled = true;
-});
+function setConnection(state) {
+  connectionStatus.className = `conn-pill ${state}`;
+  connectionStatus.querySelector(".conn-text").textContent = state;
+}
+
+function setAvatarState(state) {
+  avatarWrap.dataset.state = state;
+}
+
+function setStatus(text) { statusText.textContent = text; }
