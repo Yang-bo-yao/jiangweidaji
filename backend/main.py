@@ -14,6 +14,7 @@ from backend.conversation import run_text_turn
 from backend.graph.builder import compiled_graph
 from backend.graph.nodes import _get_session_state, _session_store
 from backend.api.feedback import router as feedback_router
+from backend.memory import load_history, list_all_sessions, delete_history
 from backend.prompts.difficulty import SCENARIO_NAMES
 
 app = FastAPI(title="Lily 口语陪练 Agent", version="0.3.0")
@@ -276,6 +277,27 @@ async def reset_session(session_id: str):
     """重置会话状态"""
     _session_store.pop(session_id, None)
     return {"status": "ok", "message": "session reset"}
+
+
+# ─── 对话历史 (记忆) ─────────────────────────────────────────────
+
+@app.get("/history/{session_id}")
+async def get_history(session_id: str):
+    """获取指定会话的完整对话历史"""
+    return load_history(session_id)
+
+
+@app.get("/history")
+async def list_history():
+    """列出所有历史会话"""
+    return {"sessions": list_all_sessions()}
+
+
+@app.delete("/history/{session_id}")
+async def remove_history(session_id: str):
+    """删除指定会话的历史记录"""
+    deleted = delete_history(session_id)
+    return {"status": "deleted" if deleted else "not_found", "session_id": session_id}
 
 
 # ─── 启动入口 ────────────────────────────────────────────────────

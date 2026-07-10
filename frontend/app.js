@@ -605,3 +605,120 @@ function setAvatarState(state) {
 function setStatus(text) {
   statusText.textContent = text;
 }
+
+/* ═══ 对话历史功能 ═══ */
+
+const historyBtn = document.getElementById("history-btn");
+const historyModal = document.getElementById("history-modal");
+const historyClose = document.getElementById("history-close");
+const historyRefresh = document.getElementById("history-refresh");
+const historyBack = document.getElementById("history-back");
+const historySessions = document.getElementById("history-sessions");
+const historyDetail = document.getElementById("history-detail");
+const historyMessages = document.getElementById("history-messages");
+
+const SCENE_ICONS = { restaurant: "🍽️", travel: "✈️", interview: "💼" };
+const SCENE_LABELS = { restaurant: "餐厅点餐", travel: "旅行问路", interview: "面试求职" };
+
+historyBtn.addEventListener("click", () => {
+  historyModal.style.display = "grid";
+  loadSessionList();
+});
+
+historyClose.addEventListener("click", () => {
+  historyModal.style.display = "none";
+});
+
+historyModal.addEventListener("click", (e) => {
+  if (e.target === historyModal) historyModal.style.display = "none";
+});
+
+historyRefresh.addEventListener("click", loadSessionList);
+
+historyBack.addEventListener("click", () => {
+  historyDetail.style.display = "none";
+  historySessions.style.display = "";
+  loadSessionList();
+});
+
+async function loadSessionList() {
+  historySessions.style.display = "";
+  historyDetail.style.display = "none";
+  historySessions.innerHTML = '<p class="history-loading">加载中...</p>';
+
+  try {
+    const res = await fetch(`${API_BASE}/history`);
+    const data = await res.json();
+    const sessions = data.sessions || [];
+
+    if (sessions.length === 0) {
+      historySessions.innerHTML = '<p class="history-loading">暂无对话历史<br>开始对话后这里会自动保存 📝</p>';
+      return;
+    }
+
+    historySessions.innerHTML = sessions.map(s => {
+      const icon = SCENE_ICONS[s.scenario] || "💬";
+      const label = SCENE_LABELS[s.scenario] || s.scenario || "未知场景";
+      const time = s.updated_at ? new Date(s.updated_at).toLocaleString("zh-CN") : "";
+      return `
+        <div class="session-card" data-sid="${s.session_id}">
+          <span class="session-icon">${icon}</span>
+          <div class="session-info">
+            <strong>${label}</strong>
+            <p>${time}</p>
+          </div>
+          <span class="session-turns">${s.turn_count} 轮</span>
+        </div>`;
+    }).join("");
+
+    // 绑定点击
+    historySessions.querySelectorAll(".session-card").forEach(card => {
+      card.addEventListener("click", () => loadSessionDetail(card.dataset.sid));
+    });
+  } catch (e) {
+    historySessions.innerHTML = '<p class="history-loading">加载失败: ' + e.message + "</p>";
+  }
+}
+
+async function loadSessionDetail(sid) {
+  historySessions.style.display = "none";
+  historyDetail.style.display = "";
+  historyMessages.innerHTML = '<p class="history-loading">加载中...</p>';
+
+  try {
+    const res = await fetch(`${API_BASE}/history/${sid}`);
+    const data = await res.json();
+    const turns = data.turns || [];
+
+    if (turns.length === 0) {
+      historyMessages.innerHTML = '<p class="history-loading">该会话暂无记录</p>';
+      return;
+    }
+
+    historyMessages.innerHTML = turns.map(t => {
+      const time = new Date(t.timestamp).toLocaleString("zh-CN");
+      const score = t.evaluation?.overall_score;
+      const scoreTag = score !== undefined
+        ? `<span class="history-score-tag ${getScoreClass(score)}">${score}分</span>` : "";
+      return `
+        <div class="history-msg user">
+          <div class="history-msg-avatar">U</div>
+          <div>
+            <div class="history-msg-bubble">${escapeHtml(t.user_text)}</div>
+          </div>
+        </div>
+        <div class="history-msg lily">
+          <div class="history-msg-avatar">L</div>
+          <div>
+            <div class="history-msg-bubble">${escapeHtml(t.reply_text)}</div>
+            <div class="history-turn-meta">🕐 ${time} · 难度: ${t.difficulty} · 情绪: ${t.emotion} ${scoreTag}</div>
+          </div>
+        </div>`;
+    }).join("");
+
+    // 滚动到底部
+    historyDetail.scrollTop = historyDetail.scrollHeight;
+  } catch (e) {
+    historyMessages.innerHTML = '<p class="history-loading">加载失败: ' + e.message + "</p>";
+  }
+}

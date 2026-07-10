@@ -11,6 +11,7 @@ from backend.graph.nodes import _get_session_state
 from backend.graph.state import EmotionState
 from backend.llm import chat as chat_module, evaluate, tts as tts_module
 from backend.mcp.server import get_tool_schemas
+from backend.memory import get_memory_context, save_turn
 from backend.prompts.difficulty import get_lily_prompt
 
 
@@ -70,7 +71,11 @@ async def run_text_turn(
     """
     ss = _get_session_state(session_id)
     difficulty = ss["difficulty_level"]
-    history = ss["history"]
+
+    # 使用持久化记忆作为 LLM 上下文（跨会话也能记住之前聊过的内容）
+    history = get_memory_context(session_id, max_turns=6)
+    # 合并内存中的近期历史（当前会话内的）
+    history.extend(ss["history"][-6:])
 
     system_prompt = get_lily_prompt(scenario, difficulty)
     tools = get_tool_schemas()
@@ -96,6 +101,18 @@ async def run_text_turn(
         push_feedback(session_id, evaluation)
 
     ss = _update_session_state(session_id, user_text, reply_text, has_errors)
+
+    # 保存到持久化历史文件（支持回看和跨会话记忆）
+    save_turn(
+        session_id,
+        scenario=scenario,
+        user_text=user_text,
+        reply_text=reply_text,
+        evaluation=evaluation,
+        difficulty=ss["difficulty_level"],
+        emotion=ss.get("emotion", EmotionState.NEUTRAL.value),
+        tool_calls=tool_calls,
+    )
 
     return {
         "user_text": user_text,
